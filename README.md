@@ -22,7 +22,8 @@ The game opens on a main menu (Play / Settings / Quit; Settings has look sensiti
 | X | Reload (hold: check magazine) |
 | D-pad left / right | Load for your **next** magazine |
 | D-pad down | Bullet paths + ballistics readout |
-| Select | Gear menu (Up/Down slot, Left/Right item, A colour, Y new look) |
+| Select | Inventory |
+| A | Search crate / use (mirror: new look) |
 | Left stick | Move |
 | Right stick | Look |
 | L3 | Sprint (third person, standing still: swap shoulder) |
@@ -54,7 +55,28 @@ Gear (`scripts/character/`):
 | `Equipment` | Slots: head, face, shirt, jacket, vest, hands, legs, feet, back, belt, accessory; totals weight/storage |
 | `CharacterModel` | Builds the visuals: rebinds clothes to the character's skeleton, mounts rigid items on bones, hides covered regions, applies appearance, procedural pose (IK arms/legs, walk, crouch, aim) |
 
-Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. On the range press **Select** for the gear menu.
+Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. 
+
+## Inventory (grid, Tarkov-style)
+
+Press **Select** (or **A** at a crate). Worn gear on the left, the storage your gear gives you in the middle, an open container on the right.
+
+- **Storage comes from what you wear.** Cargo pants: 4 pockets + 2 cargo pockets. Field jacket: 2 chest + 2 hand pockets. Chest rig: 4 mag pouches, 2 utility, 1 admin pouch. Daypack: 4x5 main compartment. T-shirt/underwear: nothing.
+- **Items have a shape** (width x height squares) and can be rotated. Ammo stacks to 50. Magazines remember their rounds. Gear can be stored with its contents.
+- **Weight matters:** worn gear + contents + pistol. Up to 55 lb no penalty; 55-99 lb slower; over 99 lb overweight (no sprint, much slower). Same rule (`Encumbrance`) will apply to enemies.
+- **Reloads use real magazines** from your rig and pockets (not the backpack); the empty goes back where the full one was. D-pad left/right picks which load to reach for. Drop loose rounds on a magazine to load it; Y on a magazine unloads it.
+
+| Controller | Inventory action |
+| --- | --- |
+| D-pad / left stick | Move cursor |
+| A | Pick up / put down (on a slot: equip) |
+| Y | Rotate held item / unload magazine |
+| X | Quick move (crate <-> you; wearables from the crate go straight on) |
+| B / Select | Close |
+
+Touch: drag and drop, or tap to pick up and tap to drop.
+
+Code: `scripts/inventory/` (ItemDef, ItemDB, InvItem, InvGrid, Encumbrance, LootContainer), `scripts/ui/inventory_screen.gd`. Icons: `tools/blender/render_icons.py` (gear, magazine) and `tools/icons/draw_icons.py` (loot, ammo).
 
 ## Ballistics
 
@@ -119,4 +141,5 @@ godot --headless --import
 godot --headless -s tools/tests/flight_gel_test.gd   # velocity/energy/drop at 25/50/100 yd + gel depth per load
 godot --headless -s tools/tests/barrier_test.gd      # every load vs every barrier, then gel behind
 godot --headless --fixed-fps 60 -s tools/tests/fire_test.gd  # firing, slide lock, reload, mag check, 25 yd zero
+godot --headless --fixed-fps 60 -s tools/tests/inventory_test.gd  # grids, stacking, mag loading, reload from pockets, weight
 ```

@@ -12,7 +12,9 @@ var _mag_check: Label
 var _hits: Label
 var _pause_panel: PanelContainer
 var _hit_lines: Array[String] = []
-var gear_menu: GearMenu
+var inventory: InventoryScreen
+var _load: Label
+var _prompt: Label
 
 
 func _ready() -> void:
@@ -26,7 +28,7 @@ func _ready() -> void:
 	_status = _label("", 26)
 	_status.position = Vector2(24, 18)
 
-	var hint := _label("START: controls    SELECT: gear", 22)
+	var hint := _label("START: controls    SELECT: inventory", 22)
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hint.position += Vector2(24, -48)
 
@@ -58,9 +60,18 @@ func _ready() -> void:
 
 	_build_pause_panel()
 	Ballistics.impact.connect(_on_impact)
-	gear_menu = GearMenu.new()
-	gear_menu.player = player
-	add_child(gear_menu)
+	_load = _label("", 22)
+	_load.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_load.position += Vector2(24, -84)
+	_prompt = _label("", 28)
+	_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_prompt.position += Vector2(0, 90)
+	add_to_group("hud")
+	inventory = InventoryScreen.new()
+	inventory.player = player
+	add_child(inventory)
 
 
 func _label(text: String, size: int) -> Label:
@@ -93,7 +104,7 @@ func _build_pause_panel() -> void:
 		"R3 ................ first / third person",
 		"L3 ................ sprint (3rd person, standing: swap shoulder)",
 		"L1 / R1 ........... lean         B ......... crouch",
-		"SELECT ............ gear (clothes, bags, hats)",
+		"SELECT ............ inventory (A near a crate to search it)",
 		"",
 		"Sights are zeroed at 25 yd (75 ft) for 230gr ball.",
 		"Bullet paths: white = flying, orange = after penetrating, yellow = ricochet.",
@@ -105,8 +116,18 @@ func _build_pause_panel() -> void:
 		_pause_panel.position = (get_viewport().get_visible_rect().size - _pause_panel.size) / 2.0)
 
 
+func open_inventory(container: LootContainer = null) -> void:
+	if not inventory.is_open():
+		inventory.open(container)
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if gear_menu and gear_menu.visible:
+	if inventory and inventory.is_open():
+		return
+	if event.is_action_pressed("inventory") and not get_tree().paused:
+		var t := player.interact_target()
+		open_inventory(t as LootContainer)
+		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):
 		var paused := not get_tree().paused
@@ -152,6 +173,10 @@ func _on_impact(info: Dictionary) -> void:
 func _process(_delta: float) -> void:
 	if player == null:
 		return
+	var open := inventory != null and inventory.is_open()
+	for c in get_children():
+		if c != inventory and c != _pause_panel and c is CanvasItem:
+			(c as CanvasItem).visible = not open
 	var stance := "Crouched" if player.crouching else ("Sprinting" if player.sprinting else "Standing")
 	if player.aiming:
 		stance += " - Aiming"
@@ -159,7 +184,7 @@ func _process(_delta: float) -> void:
 	if player.effective_view() == Player.View.THIRD:
 		view += " (%s shoulder)" % ("R" if player.shoulder > 0.0 else "L")
 	_status.text = "%s\n%s\nFPS %d" % [view, stance, Engine.get_frames_per_second()]
-	_crosshair.visible = not get_tree().paused and not player.aiming and not player.preview
+	_crosshair.visible = not get_tree().paused and not player.aiming and not player.preview and not inventory.is_open()
 
 	var f := player.firearm
 	if f:
@@ -169,11 +194,17 @@ func _process(_delta: float) -> void:
 		var lines := []
 		lines.append("Chamber: %s" % f.current_ammo_name())
 		lines.append("Mag: %s" % (f.mag_ammo.display_name if f.has_mag else "none"))
-		lines.append("Next mag:  <  %s  >" % f.next_ammo().display_name)
+		lines.append("Next mag:  <  %s  >  (%d spare)" % [f.next_ammo().display_name, f.spare_count(f.next_ammo())])
 		if f.reloading:
 			lines.push_front("RELOADING")
 		elif f.slide_locked:
 			lines.push_front("SLIDE LOCKED - reload")
 		_ammo_info.text = "\n".join(lines)
-		_mag_check.text = f.mag_check_text if f.mag_check_time > 0.0 else ""
+		_mag_check.text = f.notice if f.notice_time > 0.0 else (f.mag_check_text if f.mag_check_time > 0.0 else "")
+	var kg := player.carried_weight()
+	var st := Encumbrance.status(kg)
+	_load.text = "Load %s%s" % [Units.pounds(kg), ("  " + st) if st != "" else ""]
+	_load.add_theme_color_override("font_color", Color(0.9, 0.9, 0.86) if st == "" else (Color(1, 0.8, 0.3) if st == "HEAVY" else Color(1, 0.35, 0.3)))
+	var target := player.interact_target() if not inventory.is_open() else null
+	_prompt.text = target.prompt() if target and target.has_method("prompt") else ""
 	_hits.text = "\n".join(_hit_lines) if Ballistics.debug_enabled else ""

@@ -16,7 +16,8 @@ enum Kind { SKINNED, RIGID }
 @export var attach_bone := ""               ## RIGID only.
 @export var hides_regions: PackedStringArray = []  ## Body regions covered (hidden) while worn.
 @export var weight_kg := 0.0
-@export var capacity_l := 0.0               ## Storage volume (pockets, pouches, bags).
+@export var capacity_l := 0.0               ## Nominal volume (flavour text; real storage is grid_layout).
+@export var grid_layout: Array[Vector2i] = [] ## Storage grids (pockets, pouches, main bag) in squares.
 @export var colors: Array[Color] = []       ## Main colour choices.
 @export var accent: Color = Color(0.08, 0.08, 0.08)
 @export var roughness := 0.9

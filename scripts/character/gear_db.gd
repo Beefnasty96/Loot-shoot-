@@ -13,6 +13,25 @@ const COLOR_NAMES := {
 }
 
 
+## Storage grids per item (width x height squares) and their labels.
+const GRIDS := {
+	pants = [Vector2i(1, 1), Vector2i(1, 1), Vector2i(1, 1), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 2)],
+	jacket = [Vector2i(1, 1), Vector2i(1, 1), Vector2i(1, 2), Vector2i(1, 2)],
+	vest = [Vector2i(1, 2), Vector2i(1, 2), Vector2i(1, 2), Vector2i(1, 2), Vector2i(1, 1), Vector2i(1, 1), Vector2i(2, 2)],
+	backpack = [Vector2i(4, 5)],
+}
+const GRID_NAMES := {
+	pants = ["Front L", "Front R", "Back L", "Back R", "Cargo L", "Cargo R"],
+	jacket = ["Chest L", "Chest R", "Hand L", "Hand R"],
+	vest = ["Mag", "Mag", "Mag", "Mag", "Utility", "Utility", "Admin"],
+	backpack = ["Main"],
+}
+
+
+static func grid_names(id: String) -> Array:
+	return GRID_NAMES.get(id, [])
+
+
 static func get_item(id: String) -> GearItem:
 	_ensure()
 	return _items.get(id)
@@ -78,6 +97,12 @@ static func _ensure() -> void:
 	var pack := _add("backpack", "Daypack (25 L)", "back", R, [], 1.8, 25.0,
 		_c(["tan", "olive", "black", "grey", "coyote"]), Color(0.1, 0.1, 0.1), "Main compartment plus front and side pockets.")
 	pack.attach_bone = "UpperChest"
+	# Storage. Pockets come only from what you wear.
+	for id: String in GRIDS:
+		var layout: Array[Vector2i] = []
+		for s: Vector2i in GRIDS[id]:
+			layout.append(s)
+		_items[id].grid_layout = layout
 
 
 static func _add(id: String, name: String, slot: String, kind: GearItem.Kind, hides: Array, kg: float, litres: float,

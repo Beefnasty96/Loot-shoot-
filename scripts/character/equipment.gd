@@ -35,11 +35,31 @@ func get_slot(slot: String) -> GearInstance:
 	return worn.get(slot)
 
 
+## Worn gear plus everything stored in it.
 func total_weight() -> float:
 	var kg := 0.0
 	for g: GearInstance in worn.values():
 		kg += g.item.weight_kg
+		for grid: InvGrid in g.grids:
+			kg += grid.content_weight()
 	return kg
+
+
+## Storage grids in worn gear, in reload-search order: rig, then pockets, then bag.
+func grids(include_back := true) -> Array:
+	var out: Array = []
+	for slot in ["vest", "legs", "torso_outer", "torso_inner", "belt"] + (["back"] if include_back else []):
+		var g: GearInstance = worn.get(slot)
+		if g:
+			out.append_array(g.grids)
+	return out
+
+
+func storage_cells() -> int:
+	var n := 0
+	for grid: InvGrid in grids():
+		n += grid.size.x * grid.size.y
+	return n
 
 
 func total_capacity() -> float:

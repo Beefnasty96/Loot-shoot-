@@ -29,6 +29,7 @@ func _ready() -> void:
 	_build_barriers()
 	_build_dummies()
 	_build_civilians()
+	_build_supply()
 
 	player = Player.new()
 	player.name = "Player"
@@ -301,3 +302,55 @@ func _build_civilians() -> void:
 		c.apply_appearance()
 		c.random_outfit(rng)
 	_label("RANDOM CIVILIANS", Vector3(13.9, 2.4, 11.5), 56)
+
+
+## Supply crate (A to search) and a mirror (A for a new look) next to spawn.
+func _build_supply() -> void:
+	var crate := LootContainer.new("Supply crate", 12, 14)
+	crate.position = Vector3(-2.6, 0.45, 17.2)
+	crate.set_meta("material", "wood_crate")
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(1.4, 0.9, 0.8)
+	mesh.mesh = box
+	mesh.material_override = _checker_material(Color(0.42, 0.45, 0.28), Color(0.38, 0.41, 0.25), 0.25)
+	crate.add_child(mesh)
+	var cs := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = box.size
+	cs.shape = shape
+	crate.add_child(cs)
+	add_child(crate)
+	_label("SUPPLY CRATE", Vector3(-2.6, 1.3, 17.2), 40)
+	for id in ["backpack", "vest", "jacket", "cap", "beanie", "tshirt", "laptop"]:
+		crate.add(InvItem.create(id))
+	for a in AmmoDB.all_for(".45 ACP"):
+		crate.add(InvItem.magazine(a, 7))
+	for i in 4:
+		crate.add(InvItem.magazine(null, 0))
+	for a in AmmoDB.all_for(".45 ACP"):
+		crate.add(InvItem.rounds(a.id, 50))
+		crate.add(InvItem.rounds(a.id, 50))
+	for id in ["gpu", "medkit", "water", "ifak", "painkillers", "painkillers", "beans", "cash", "cash", "cash", "gold", "gold", "docs"]:
+		crate.add(InvItem.create(id))
+
+	var mirror := Mirror.new()
+	mirror.position = Vector3(2.6, 1.0, 19.6)
+	var glass := MeshInstance3D.new()
+	var pm := BoxMesh.new()
+	pm.size = Vector3(1.0, 1.9, 0.05)
+	glass.mesh = pm
+	var gm := StandardMaterial3D.new()
+	gm.albedo_color = Color(0.75, 0.8, 0.85)
+	gm.metallic = 0.9
+	gm.roughness = 0.1
+	glass.material_override = gm
+	mirror.add_child(glass)
+	var ms := CollisionShape3D.new()
+	var mshape := BoxShape3D.new()
+	mshape.size = pm.size
+	ms.shape = mshape
+	mirror.add_child(ms)
+	mirror.set_meta("material", "glass")
+	add_child(mirror)
+	_label("MIRROR", Vector3(2.6, 2.2, 19.6), 40)
