@@ -100,7 +100,7 @@ func _process(_d: float) -> bool:
 		n.damage.blood_ml = n.damage.blood_max * 0.605
 	if f == 6 + 240:
 		var n = npcs[1]
-		check(n.model.crouch > 0.3 or n.dead, "low on blood they sag")
+		check(n.model.shock > 0.4 or n.dead, "low on blood they go into shock (pale, drooping)")
 	if f == 6 + 400:
 		var n = npcs[1]
 		check(n.dead and n.damage.cause == "blood loss", "they bleed out and die")
