@@ -12,6 +12,7 @@ var _mag_check: Label
 var _hits: Label
 var _pause_panel: PanelContainer
 var _hit_lines: Array[String] = []
+var gear_menu: GearMenu
 
 
 func _ready() -> void:
@@ -25,7 +26,7 @@ func _ready() -> void:
 	_status = _label("", 26)
 	_status.position = Vector2(24, 18)
 
-	var hint := _label("START: controls", 22)
+	var hint := _label("START: controls    SELECT: gear", 22)
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hint.position += Vector2(24, -48)
 
@@ -57,6 +58,9 @@ func _ready() -> void:
 
 	_build_pause_panel()
 	Ballistics.impact.connect(_on_impact)
+	gear_menu = GearMenu.new()
+	gear_menu.player = player
+	add_child(gear_menu)
 
 
 func _label(text: String, size: int) -> Label:
@@ -79,7 +83,7 @@ func _build_pause_panel() -> void:
 	var text := Label.new()
 	text.add_theme_font_size_override("font_size", 24)
 	text.text = "\n".join([
-		"PAUSED  -  Loot Shoot test gym v0.3",
+		"PAUSED  -  Loot Shoot test gym v0.4",
 		"",
 		"Left stick ........ move            Right stick ....... look",
 		"R2 ................ fire            L2 ................ aim down sights",
@@ -89,6 +93,7 @@ func _build_pause_panel() -> void:
 		"R3 ................ first / third person",
 		"L3 ................ sprint (3rd person, standing: swap shoulder)",
 		"L1 / R1 ........... lean         B ......... crouch",
+		"SELECT ............ gear (clothes, bags, hats)",
 		"",
 		"Sights are zeroed at 25 yd for 230gr ball.",
 		"Bullet paths: white = flying, orange = after penetrating, yellow = ricochet.",
@@ -101,6 +106,8 @@ func _build_pause_panel() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if gear_menu and gear_menu.visible:
+		return
 	if event.is_action_pressed("pause"):
 		var paused := not get_tree().paused
 		get_tree().paused = paused
@@ -149,7 +156,7 @@ func _process(_delta: float) -> void:
 	if player.effective_view() == Player.View.THIRD:
 		view += " (%s shoulder)" % ("R" if player.shoulder > 0.0 else "L")
 	_status.text = "%s\n%s\nFPS %d" % [view, stance, Engine.get_frames_per_second()]
-	_crosshair.visible = not get_tree().paused and not player.aiming
+	_crosshair.visible = not get_tree().paused and not player.aiming and not player.preview
 
 	var f := player.firearm
 	if f:

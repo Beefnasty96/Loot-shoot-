@@ -22,6 +22,7 @@ A grey-box yard with cover, a firing lane with target dummies at 10/20/30 m, a *
 | X | Reload (hold: check magazine) |
 | D-pad left / right | Load for your **next** magazine |
 | D-pad down | Bullet paths + ballistics readout |
+| Select | Gear menu (Up/Down slot, Left/Right item, A colour, Y new look) |
 | Left stick | Move |
 | Right stick | Look |
 | L3 | Sprint (third person, standing still: swap shoulder) |
@@ -32,6 +33,26 @@ A grey-box yard with cover, a firing lane with target dummies at 10/20/30 m, a *
 | Start | Pause + controls |
 
 PC testing: WASD, mouse, V view, Shift sprint, C shoulder, Q/E lean, Ctrl crouch, right mouse aim, Esc pause.
+
+## Characters and gear
+
+Everyone (player in third person, NPCs) is the same **base body** (`assets/characters/base/body.glb`, ~1.5k tris) built from the source mesh by `tools/blender/body_build.py`:
+
+- Five-finger hands, 53-bone skeleton named after Godot's humanoid profile (animation retargeting later).
+- Split into regions (`Body_head`, `Body_torso`, `Body_upper_arms`, `Body_forearms`, `Body_hands`, `Body_hips`, `Body_thighs`, `Body_shins`, `Body_feet`, `Body_neck`). Gear hides the regions it covers.
+- Appearance masks (skin shading, brows, scalp hair, beard, underwear, eyes, lips) tinted by `shaders/body.gdshader` from an `Appearance` (skin tone, hair/eye colour, bald/hair, beard, height).
+
+Gear (`scripts/character/`):
+
+| Piece | Role |
+| --- | --- |
+| `GearItem` | Definition: slot, SKINNED (clothes on the body's skeleton) or RIGID (on a bone), hidden regions, weight, storage litres, colour choices; armour fields reserved |
+| `GearDB` | Catalogue |
+| `GearInstance` | One copy: colour, condition, contents (for bags) |
+| `Equipment` | Slots: head, face, shirt, jacket, vest, hands, legs, feet, back, belt, accessory; totals weight/storage |
+| `CharacterModel` | Builds the visuals: rebinds clothes to the character's skeleton, mounts rigid items on bones, hides covered regions, applies appearance, procedural pose (IK arms/legs, walk, crouch, aim) |
+
+Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. In the gym press **Select** for the gear menu.
 
 ## Ballistics
 
@@ -64,6 +85,9 @@ python3 tools/blender/m1911_textures.py assets/weapons/m1911/textures
 python3 tools/blender/m1911_build.py assets/weapons/m1911
 python3 tools/blender/render_preview.py assets/weapons/m1911/m1911.blend /tmp/renders
 python3 tools/blender/arms_build.py assets/viewmodels/arms     # gloved first-person arms, rigged
+python3 tools/blender/body_build.py assets/characters/base/source/base_mesh.fbx assets/characters/base
+python3 tools/blender/gear_build.py assets/characters/base/body.blend assets/gear
+python3 tools/blender/render_gear.py assets/characters/base/body.blend assets/gear /tmp/fit.png tshirt,pants,boots
 python3 tools/blender/render_fp.py assets/viewmodels/arms/arms.blend assets/weapons/m1911/m1911.blend /tmp/fp
 ```
 

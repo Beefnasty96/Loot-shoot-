@@ -133,6 +133,9 @@ func _process(delta: float) -> void:
 	if mag_check_time > 0.0:
 		mag_check_time -= delta
 
+	if player.ui_locked:
+		_animate(delta)
+		return
 	if Input.is_action_just_pressed("fire"):
 		_try_fire(now)
 	if Input.is_action_just_pressed("ammo_next"):

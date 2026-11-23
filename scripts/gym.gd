@@ -28,6 +28,7 @@ func _ready() -> void:
 	_build_platform()
 	_build_barriers()
 	_build_dummies()
+	_build_civilians()
 
 	player = Player.new()
 	player.name = "Player"
@@ -284,3 +285,19 @@ func _build_dummies() -> void:
 	var hidden := TargetDummy.new()
 	hidden.position = Vector3(12.5, 0.0, -2.5)
 	add_child(hidden)
+
+
+## A row of randomly generated people: same base body, different skin, hair,
+## beard, height and clothes every time the gym loads.
+func _build_civilians() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for i in 5:
+		var c := CharacterModel.new()
+		c.position = Vector3(9.5 + i * 2.2, 0.0, 11.5)
+		c.rotation.y = PI  # face the spawn
+		add_child(c)
+		c.appearance.randomize(rng)
+		c.apply_appearance()
+		c.random_outfit(rng)
+	_label("RANDOM CIVILIANS", Vector3(13.9, 2.4, 11.5), 56)

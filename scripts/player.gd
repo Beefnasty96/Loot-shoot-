@@ -43,8 +43,9 @@ var _bob_time := 0.0
 var _shape: CapsuleShape3D
 var _collision: CollisionShape3D
 var _model: Node3D
-var _body_mesh: MeshInstance3D
-var _head_mesh: MeshInstance3D
+var character: CharacterModel
+var ui_locked := false        ## Gear menu open: no moving, shooting or view changes.
+var preview := false          ## Camera turned around to look at yourself (gear menu).
 var head: Node3D             ## Pitch + lean pivot at eye height.
 var fp_camera: Camera3D
 var _spring: SpringArm3D
@@ -73,36 +74,20 @@ func _build() -> void:
 	_collision.position.y = STAND_HEIGHT / 2.0
 	add_child(_collision)
 
-	# Low-poly stand-in model, only seen in third person.
+	# Third-person body: the shared base body + gear, hidden from the first-person camera.
 	_model = Node3D.new()
 	add_child(_model)
-	var suit := StandardMaterial3D.new()
-	suit.albedo_color = Color(0.32, 0.36, 0.24)
-	var body := CapsuleMesh.new()
-	body.radius = RADIUS
-	body.height = 1.45
-	body.radial_segments = 8
-	body.rings = 2
-	body.material = suit
-	_body_mesh = MeshInstance3D.new()
-	_body_mesh.mesh = body
-	_body_mesh.position.y = 0.725
-	_body_mesh.layers = PLAYER_MODEL_LAYER
-	_model.add_child(_body_mesh)
-
-	var skin := StandardMaterial3D.new()
-	skin.albedo_color = Color(0.2, 0.2, 0.22)  # balaclava / helmet
-	var head_box := BoxMesh.new()
-	head_box.size = Vector3(0.26, 0.3, 0.28)
-	head_box.material = skin
-	_head_mesh = MeshInstance3D.new()
-	_head_mesh.mesh = head_box
-	_head_mesh.layers = PLAYER_MODEL_LAYER
+	character = CharacterModel.new()
+	_model.add_child(character)
+	character.layers = PLAYER_MODEL_LAYER
+	character.pose_mode = CharacterModel.PoseMode.PISTOL
+	for id in ["tshirt", "pants", "boots", "gloves"]:
+		var colour := {"tshirt": 3, "pants": 1, "boots": 0, "gloves": 0}[id] as int
+		character.equipment.equip(GearInstance.create(id, colour))
 
 	head = Node3D.new()
 	head.position.y = EYE_STAND
 	add_child(head)
-	head.add_child(_head_mesh)
 
 	fp_camera = Camera3D.new()
 	fp_camera.near = 0.05
@@ -133,9 +118,13 @@ func _build() -> void:
 
 	# Third-person stand-in: the same pistol held out in front, following your aim.
 	_tp_weapon = (load("res://assets/weapons/m1911/m1911.glb") as PackedScene).instantiate()
-	_tp_weapon.position = Vector3(0.18, -0.28, -0.42)
+	_tp_weapon.position = Vector3(0.1, -0.3, -0.45)
 	head.add_child(_tp_weapon)
 	_set_layers(_tp_weapon, PLAYER_MODEL_LAYER)
+	# Where the third-person body's hands go (pistol space: -Z forward).
+	character.grip_point = _marker(_tp_weapon, Vector3(0.0, -0.064, 0.057))
+	character.grip_right = _marker(_tp_weapon, Vector3(0.006, -0.085, 0.125))
+	character.grip_left = _marker(_tp_weapon, Vector3(-0.035, -0.1, 0.105))
 
 	firearm = Firearm.new()
 	firearm.player = self
@@ -153,6 +142,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed and OS.has_feature("pc"):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
+	if ui_locked:
+		return
 	if event.is_action_pressed("toggle_view"):
 		view = View.THIRD if view == View.FIRST else View.FIRST
 		_apply_view()
@@ -171,6 +162,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _move_input() -> Vector2:
+	if ui_locked:
+		return Vector2.ZERO
 	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 
 
@@ -201,7 +194,7 @@ func _process(delta: float) -> void:
 		_recoil_recover -= settle
 
 	var was_aiming := aiming
-	aiming = Input.is_action_pressed("aim")
+	aiming = Input.is_action_pressed("aim") and not ui_locked
 	if aiming != was_aiming:
 		if aiming:
 			sprinting = false
@@ -209,9 +202,9 @@ func _process(delta: float) -> void:
 
 	# Lean (hold L1 / R1).
 	var lean_target := 0.0
-	if Input.is_action_pressed("lean_left"):
+	if Input.is_action_pressed("lean_left") and not ui_locked:
 		lean_target -= 1.0
-	if Input.is_action_pressed("lean_right"):
+	if Input.is_action_pressed("lean_right") and not ui_locked:
 		lean_target += 1.0
 	if sprinting:
 		lean_target = 0.0
@@ -231,7 +224,20 @@ func _process(delta: float) -> void:
 
 	head.position = Vector3(lean * LEAN_OFFSET, eye, 0.0)
 	head.rotation = Vector3(deg_to_rad(pitch), 0.0, deg_to_rad(-lean * LEAN_ROLL_DEG))
-	_spring.position.x = lerpf(_spring.position.x, SHOULDER_OFFSET * shoulder, minf(1.0, delta * 8.0))
+	# Preview (gear menu): swing the camera round to face the character.
+	var spring_x := 0.0 if preview else SHOULDER_OFFSET * shoulder
+	_spring.position.x = lerpf(_spring.position.x, spring_x, minf(1.0, delta * 8.0))
+	_spring.rotation.y = lerp_angle(_spring.rotation.y, PI if preview else 0.0, minf(1.0, delta * 8.0))
+	_spring.spring_length = lerpf(_spring.spring_length, 1.7 if preview else SPRING_LENGTH, minf(1.0, delta * 8.0))
+	if preview:
+		_spring.rotation.x = lerpf(_spring.rotation.x, deg_to_rad(pitch) + 0.12, minf(1.0, delta * 8.0))  # cancel head pitch: a level look at yourself
+	else:
+		_spring.rotation.x = lerpf(_spring.rotation.x, 0.0, minf(1.0, delta * 8.0))
+
+	# Drive the third-person body.
+	character.aim_pitch = deg_to_rad(pitch)
+	character.move_speed = Vector2(velocity.x, velocity.z).length()
+	character.crouch = move_toward(character.crouch, 1.0 if crouching else 0.0, delta * 5.0)
 
 	var target_fov := fov_aim if aiming else fov_normal
 	fp_camera.fov = lerpf(fp_camera.fov, target_fov, minf(1.0, delta * 12.0))
@@ -270,8 +276,6 @@ func _set_crouch(on: bool) -> void:
 	_height = CROUCH_HEIGHT if on else STAND_HEIGHT
 	_shape.height = _height
 	_collision.position.y = _height / 2.0
-	_body_mesh.scale.y = _height / STAND_HEIGHT
-	_body_mesh.position.y = 0.725 * _height / STAND_HEIGHT
 
 
 func _blocked_above() -> bool:
@@ -283,6 +287,13 @@ func _blocked_above() -> bool:
 	return not space.intersect_ray(query).is_empty()
 
 
+func _marker(parent: Node3D, pos: Vector3) -> Node3D:
+	var m := Node3D.new()
+	m.position = pos
+	parent.add_child(m)
+	return m
+
+
 func _set_layers(node: Node, layer: int) -> void:
 	for child in node.get_children():
 		if child is VisualInstance3D:
@@ -291,7 +302,19 @@ func _set_layers(node: Node, layer: int) -> void:
 
 
 func effective_view() -> View:
+	if preview:
+		return View.THIRD
 	return View.FIRST if aiming else view
+
+
+## Gear menu open/close: lock controls and turn the camera to face you.
+func set_preview(on: bool) -> void:
+	preview = on
+	ui_locked = on
+	if on:
+		sprinting = false
+		aiming = false
+	_apply_view()
 
 
 func view_name() -> String:
