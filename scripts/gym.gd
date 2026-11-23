@@ -15,6 +15,7 @@ var _wall_ballistic := "concrete"  ## Ballistic material used by _wall_x / _wall
 
 func _ready() -> void:
 	DisplayServer.screen_set_keep_on(true)
+	Ballistics.debug_enabled = true  # bullet paths + readout on by default in the test gym
 	_mat_floor = _checker_material(Color(0.42, 0.42, 0.40), Color(0.36, 0.36, 0.34), 1.0)
 	_mat_wall = _checker_material(Color(0.62, 0.60, 0.55), Color(0.56, 0.54, 0.50), 1.0)
 	_mat_cover = _checker_material(Color(0.55, 0.42, 0.26), Color(0.48, 0.36, 0.22), 0.5)
