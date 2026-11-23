@@ -13,8 +13,12 @@ extends Node3D
 ## passes through.
 ##
 ## Bleeding: each hit opens a wound (DamageModel) that bleeds onto their clothes
-## and drips onto the floor, pooling where they stand or lie. As blood runs low
-## they sag; at 40% lost they collapse and die.
+## and drips onto the floor, pooling where they stand or lie. At 40% lost they die.
+##
+## Wounded but alive, they show it: limp off a hurt leg, a shot arm hangs, a hand
+## presses on the worst wound, they hunch over torso wounds and breathe hard, go
+## pale and droop as they lose blood, and go down on a knee or onto the ground
+## when a leg gives out or they're close to passing out. Once down they stay down.
 
 const HITBOXES := [
 	# zone, bone, centre (rest pose, rig space: +Z forward, +X = their left), size, gel factor
@@ -42,6 +46,9 @@ var dead := false
 var title := "Body"
 var _hitboxes: Array[Hitbox] = []
 var _stagger := Vector3.ZERO      ## Sideways shove velocity while alive (m/s).
+var pain := 0.0                   ## Spikes when hit, settles to what the wounds justify.
+var _kneel_target := 0.0
+var _sit_target := 0.0
 
 ## How much the deposited energy adds to the push, kg·m/s per joule. Real bullet momentum
 ## alone barely moves a body; the extra stands in for the involuntary flinch/collapse.
@@ -110,6 +117,7 @@ func _build_hitboxes() -> void:
 
 func _process(delta: float) -> void:
 	_bleed(delta)
+	_act_wounded(delta)
 	if dead or _stagger.length_squared() < 1e-6:
 		return
 	model.position += _stagger * delta
@@ -146,13 +154,42 @@ func _bleed(delta: float) -> void:
 			# Running blood drips off a little out from the body, not from inside it.
 			Ballistics.blood.drip(from + Vector3(randf_range(-0.04, 0.04), 0.0, randf_range(-0.04, 0.04)), w.drip_acc)
 			w.drip_acc = 0.0
-	if dead:
-		return
-	# Low on blood: they sag at the knees, then collapse.
-	var lost := 1.0 - damage.blood_fraction()
-	model.crouch = clampf((lost - 0.2) / 0.2, 0.0, 1.0) * 0.8
-	if damage.dead:
+	if damage.dead and not dead:
 		die()
+
+
+## Body language for wounds: drives CharacterModel's hurt/pain/shock/kneel/sit/clutch.
+func _act_wounded(delta: float) -> void:
+	if dead or (damage.wounds.is_empty() and pain <= 0.0):
+		return
+	var h := model.hurt
+	for z in ["leg_l", "leg_r", "arm_l", "arm_r", "head"]:
+		h[z] = move_toward(h[z], damage.hurt(z), delta * 2.0)
+	h.torso = move_toward(h.torso, maxf(damage.hurt("thorax"), damage.hurt("stomach")), delta * 2.0)
+	var shock := damage.shock()
+	var base := clampf((h.torso + h.head + maxf(h.leg_l, h.leg_r) + maxf(h.arm_l, h.arm_r)) * 0.5, 0.0, 0.8)
+	pain = move_toward(pain, base, delta * 0.15)
+	model.pain = pain
+	model.shock = move_toward(model.shock, shock, delta * 0.5)
+	# Going down: a leg that gives out or nearly passing out puts them on a knee; worse puts them on the ground.
+	var legs_bad: float = maxf(h.leg_l, h.leg_r)
+	if legs_bad >= 0.7 or shock > 0.45 or h.torso > 0.65:
+		_kneel_target = 1.0
+	if minf(h.leg_l, h.leg_r) >= 0.5 or damage.hp.leg_l <= 0.0 or damage.hp.leg_r <= 0.0 or shock > 0.7 or h.torso > 0.85:
+		_sit_target = 1.0
+	model.kneel = move_toward(model.kneel, _kneel_target, delta * 1.8)
+	model.sit = move_toward(model.sit, _sit_target, delta * 1.2)
+	# Press a hand on the worst wound (the model picks which hand).
+	var worst: Dictionary = {}
+	var score := 0.0
+	for w: Dictionary in damage.wounds:
+		if w.zone.begins_with("leg") and model.kneel + model.sit < 0.5:
+			continue   # can't reach a thigh wound standing up
+		var s: float = w.rate + (8.0 if w.zone in ["thorax", "stomach"] else 0.0) + (3.0 if w.heavy else 0.0)
+		if s > score and not w.get("marks", []).is_empty():
+			score = s
+			worst = w
+	model.clutch = worst.marks[0] if not worst.is_empty() and is_instance_valid(worst.marks[0]) else null
 
 
 func take_hit(info: Dictionary) -> void:
@@ -172,6 +209,7 @@ func take_hit(info: Dictionary) -> void:
 	# Flinch: the struck part reacts by its own mass (an arm jerks more than a chest).
 	# Stagger: the whole body, so lighter people (and lighter loads) get moved more.
 	model.react(info.zone, dir, clampf(push / model.segment_mass_kg(info.bone) * 1.5, 0.05, 1.5))
+	pain = clampf(pain + info.damage / 40.0, 0.0, 1.0)
 	var mass := model.total_mass_kg()
 	var flat := Vector3(dir.x, 0.0, dir.z)
 	_stagger += global_transform.basis.inverse() * flat * (push / mass) * 8.0

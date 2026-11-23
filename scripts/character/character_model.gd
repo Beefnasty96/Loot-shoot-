@@ -55,6 +55,17 @@ var _parent: PackedInt32Array = []
 var _child_dir: Array[Vector3] = []
 var _phase := 0.0
 
+# ---- wounded body language (set by Npc from its DamageModel; all 0..1)
+var hurt := {leg_l = 0.0, leg_r = 0.0, arm_l = 0.0, arm_r = 0.0, torso = 0.0, head = 0.0}
+var pain := 0.0                    ## Fast breathing, hunching, trembling.
+var shock := 0.0                   ## Blood loss: head droops, skin goes pale.
+var kneel := 0.0                   ## Down on one knee (the hurt leg).
+var sit := 0.0                     ## Down on the ground, propped on one arm.
+var clutch: Node3D                 ## A wound to press a hand on (world position), or null.
+var _clutch_k := 0.0
+var _t := 0.0
+var _pale := -1.0
+
 # ---- ragdoll / mass
 ## Body-segment share of mass (Dempster / Winter tables), collision radius, cone swing, twist.
 ## Bones not listed (Chest, Neck, hands, fingers, toes) ride on their parent.
@@ -118,6 +129,7 @@ func apply_appearance() -> void:
 		return
 	update_ragdoll_masses()
 	_body_mat.set_shader_parameter("skin_tone", appearance.skin_tone)
+	_pale = -1.0
 	_body_mat.set_shader_parameter("hair_color", appearance.hair_color)
 	_body_mat.set_shader_parameter("eye_color", appearance.eye_color)
 	_body_mat.set_shader_parameter("underwear_color", appearance.underwear_color)
@@ -273,6 +285,13 @@ func _process(delta: float) -> void:
 		var r: Array = _react[k]
 		r[2] += (-r[1] * 180.0 - r[2] * 16.0) * delta    # stiff, well-damped spring: a sharp flinch
 		r[1] += r[2] * delta
+	_t += delta
+	_clutch_k = move_toward(_clutch_k, 1.0 if clutch and is_instance_valid(clutch) else 0.0, delta * 2.5)
+	if _body_mat and absf(shock - _pale) > 0.02:
+		_pale = shock
+		var c := appearance.skin_tone
+		var lum := c.get_luminance()
+		_body_mat.set_shader_parameter("skin_tone", c.lerp(Color(lum * 1.05, lum * 1.02, lum * 1.08), shock * 0.7).lightened(shock * 0.08))
 	var speed_k := clampf(move_speed / 3.2, 0.0, 1.8)
 	_phase = fmod(_phase + delta * (2.0 + move_speed * 2.2) * (1.0 if move_speed > 0.2 else 0.0), TAU)
 	_pose(speed_k)
@@ -286,6 +305,24 @@ func _pose(speed_k: float) -> void:
 	var pending := {}   # bone -> desired direction (computed by IK at the chain root)
 	var curl := 1.25 if pose_mode == PoseMode.PISTOL else 0.35
 	var drop := crouch * 0.42
+	# Wounded: favour the worse leg, hunch over torso wounds, breathe hard, go down.
+	var hips_y := _rest_global[_b("Hips")].origin.y
+	var limp: float = maxf(hurt.leg_l, hurt.leg_r)
+	var bad := 1.0 if hurt.leg_l >= hurt.leg_r else -1.0       # side of the worse leg (+1 = their left)
+	var standing := (1.0 - kneel) * (1.0 - sit)
+	drop += limp * 0.03 * standing
+	drop = lerpf(drop, hips_y - 0.55, kneel * (1.0 - sit))
+	drop = lerpf(drop, hips_y - 0.17, sit)
+	var hunch: float = clampf(hurt.torso * 0.45 + pain * 0.15 + shock * 0.15, 0.0, 0.6) * (1.0 - sit * 0.5)
+	var breath := sin(_t * lerpf(1.6, 4.5, maxf(pain, shock))) * 0.03 * (0.3 + pain)
+	var tremble := (sin(_t * 31.0) * 0.5 + sin(_t * 47.0) * 0.5) * 0.012 * maxf(pain - 0.3, shock)
+	var clutch_skel := to_skel * clutch.global_position if clutch and is_instance_valid(clutch) else Vector3.ZERO
+	var clutch_side := 0.0
+	if _clutch_k > 0.0:
+		clutch_side = 1.0 if clutch_skel.x >= 0.0 else -1.0
+		var arm_on := "arm_l" if clutch_side > 0 else "arm_r"
+		if hurt[arm_on] > 0.4 or clutch_skel.distance_to(_rest_global[_b("LeftUpperArm" if clutch_side > 0 else "RightUpperArm")].origin) < 0.45:
+			clutch_side = -clutch_side   # use the other hand on a wounded arm or shoulder
 
 	for i in n:
 		var p := _parent[i]
@@ -298,15 +335,21 @@ func _pose(speed_k: float) -> void:
 		if name == "Hips":
 			var buckle := (_react_angle("leg_l") + _react_angle("leg_r")) * 0.25
 			want.origin.y -= drop + absf(sin(_phase)) * 0.02 * speed_k + absf(buckle)
+			want.origin.x -= bad * limp * 0.05 * standing         # weight onto the good leg
+			want = _rot(want, Vector3.FORWARD, bad * limp * 0.07 * standing)
+			want = _rot(want, Vector3.RIGHT, -0.25 * sit)          # sitting: pelvis rolls back
 		elif name == "Spine":
-			want = _rot(neutral, Vector3.RIGHT, crouch * 0.25)
+			want = _rot(neutral, Vector3.RIGHT, crouch * 0.25 + hunch * 0.55 + sit * 0.2)
 			want = _apply_react(want, "torso", 0.4)
 		elif name == "UpperChest":
 			var pitch := aim_pitch * (0.45 if pose_mode == PoseMode.PISTOL else 0.15)
-			want = _rot(neutral, Vector3.LEFT, pitch)
+			want = _rot(neutral, Vector3.LEFT, pitch - hunch * 0.45 - breath)
+			if clutch_side != 0.0:
+				want = _rot(want, Vector3.FORWARD, -clutch_side * 0.12 * _clutch_k * (hurt.torso + 0.3))   # curl toward the wound
 			want = _apply_react(want, "torso", 0.6)
 		elif name == "Head":
-			want = _rot(neutral, Vector3.LEFT, aim_pitch * 0.4)
+			want = _rot(neutral, Vector3.LEFT, aim_pitch * 0.4 - shock * 0.55 - hurt.head * 0.2 + tremble)
+			want = _rot(want, Vector3.FORWARD, hurt.head * 0.15 + tremble)
 			want = _apply_react(want, "head", 1.0)
 		elif name.ends_with("UpperLeg"):
 			var hip := neutral.origin
@@ -317,9 +360,21 @@ func _pose(speed_k: float) -> void:
 			ankle.z += swing * 0.2 * speed_k
 			ankle.y += maxf(0.0, -cos(_phase + (0.0 if side > 0 else PI))) * 0.07 * speed_k
 			ankle.x += side * crouch * 0.06
+			var pole := Vector3(side * 0.15, 0.0, 1.0)
+			var mine: float = hurt.leg_l if side > 0 else hurt.leg_r
+			# Favour a hurt leg: weight off it, foot lifted onto the toes and a little forward.
+			ankle += Vector3(0.0, 0.05, 0.06) * mine * standing
+			var rest_ankle := _rest_global[foot_i].origin
+			if kneel > 0.0:   # down on the bad knee, the other foot planted forward
+				var k_target := rest_ankle + (Vector3(0.0, 0.06, -0.42) if side == bad else Vector3(side * 0.03, 0.0, 0.34))
+				ankle = ankle.lerp(k_target, kneel * (1.0 - sit))
+				pole = pole.lerp(Vector3(side * 0.1, 0.6, 1.0), kneel)
+			if sit > 0.0:     # on the ground, legs out in front, knees up a bit
+				ankle = ankle.lerp(rest_ankle + Vector3(side * 0.08, 0.0, 0.7 if side == bad else 0.55), sit)
+				pole = pole.lerp(Vector3(side * 0.3, 1.0, 0.4), sit)
 			var l1 := _child_dir[i].length()
 			var l2 := _child_dir[knee_i].length()
-			var knee := _two_bone(hip, ankle, l1, l2, Vector3(side * 0.15, 0.0, 1.0))
+			var knee := _two_bone(hip, ankle, l1, l2, pole)
 			want = _aim(neutral, i, knee - hip)
 			pending[knee_i] = ankle - knee
 			pending[foot_i] = "flat"
@@ -340,9 +395,20 @@ func _pose(speed_k: float) -> void:
 				hand_dir = (centre - target) + (centre - sh).normalized() * 0.04
 			else:
 				var swing := sin(_phase + (PI if side > 0 else 0.0)) * 0.12 * speed_k
-				target = sh + Vector3(side * 0.07, -0.49, 0.05 + swing)
+				var limp_arm: float = hurt.arm_l if side > 0 else hurt.arm_r
+				target = sh + Vector3(side * 0.07, -0.49, 0.05 + swing * (1.0 - limp_arm))
+				target = target.lerp(sh + Vector3(side * 0.03, -0.54, -0.03), clampf(limp_arm * 1.5, 0.0, 1.0))  # hangs dead
 				pole = Vector3(side * 0.3, 0.0, -1.0)
 				hand_dir = Vector3(side * 0.1, -1.0, 0.15)
+				if sit > 0.0 and side != clutch_side:   # propped up on this hand
+					target = target.lerp(Vector3(side * 0.32, 0.04, -0.22), sit)
+					hand_dir = hand_dir.lerp(Vector3(side * 0.2, -0.3, -1.0), sit)
+				if side == clutch_side:                 # pressing on the wound
+					var press := clutch_skel + (clutch_skel - Vector3(0.0, clutch_skel.y, 0.0)).normalized() * 0.03
+					target = target.lerp(press, _clutch_k)
+					pole = pole.lerp(Vector3(side * 0.8, -0.6, -0.6), _clutch_k)
+					hand_dir = hand_dir.lerp((Vector3(0.0, clutch_skel.y, 0.0) - clutch_skel).normalized() + Vector3(0, -0.3, 0), _clutch_k)
+				target += Vector3(tremble, tremble * 0.5, 0.0)
 			var elbow := _two_bone(sh, target, l1, l2, pole)
 			want = _aim(neutral, i, elbow - sh)
 			want = _apply_react(want, "arm_l" if side > 0 else "arm_r", 1.0)
