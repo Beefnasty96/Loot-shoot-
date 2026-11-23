@@ -17,6 +17,7 @@ concurrency:
 
 env:
   GODOT_VERSION: "4.7.1"
+  HAS_SIGNING_PASSPHRASE: ${{ secrets.SIGNING_PASSPHRASE != '' }}
 
 jobs:
   build:
@@ -71,7 +72,9 @@ jobs:
           cat ~/.config/godot/editor_settings-${MM}.tres
 
       # Same signing key every build, so new APKs install over old ones.
-      # Uses repo secrets if you add them later; otherwise a key kept in the Actions cache.
+      # Permanent storage: signing/keystore.tar.enc in the repo, encrypted (AES-256,
+      # PBKDF2) with the SIGNING_PASSPHRASE repo secret. Until that secret exists,
+      # the key lives in the Actions cache (cleared after 7 days without builds).
       - name: Restore signing key
         uses: actions/cache@v4
         with:
@@ -80,15 +83,18 @@ jobs:
 
       - name: Prepare signing key
         env:
-          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PASSPHRASE: ${{ secrets.SIGNING_PASSPHRASE }}
         run: |
           set -euo pipefail
           mkdir -p ~/keystore
-          if [ -n "${KS_B64}" ]; then
-            echo "${KS_B64}" | base64 -d > ~/keystore/release.keystore
-            printf '%s' "${KS_PASS}" > ~/keystore/pass
-          elif [ ! -f ~/keystore/release.keystore ]; then
+          if [ -f signing/keystore.tar.enc ] && [ -n "${PASSPHRASE}" ]; then
+            echo "Using the permanent signing key from the repo."
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:PASSPHRASE \
+              -in signing/keystore.tar.enc | tar -x -C ~/keystore
+          elif [ -f signing/keystore.tar.enc ]; then
+            echo "::warning::signing/keystore.tar.enc exists but SIGNING_PASSPHRASE is not set; falling back to the cached key."
+          fi
+          if [ ! -f ~/keystore/release.keystore ]; then
             echo "No signing key yet: generating one (cached for future builds)."
             openssl rand -hex 16 | tr -d '\n' > ~/keystore/pass
             keytool -genkeypair -keystore ~/keystore/release.keystore -alias lootshoot \
@@ -103,6 +109,27 @@ jobs:
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=lootshoot"
             echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=${PASS}"
           } >> "$GITHUB_ENV"
+
+      # One time only: once SIGNING_PASSPHRASE is set, lock the current key into the
+      # repo (encrypted) so it survives cache clears. Commit is marked [skip ci].
+      - name: Save signing key permanently
+        env:
+          PASSPHRASE: ${{ secrets.SIGNING_PASSPHRASE }}
+        if: ${{ env.HAS_SIGNING_PASSPHRASE == 'true' && hashFiles('signing/keystore.tar.enc') == '' }}
+        run: |
+          set -euo pipefail
+          if [ ${#PASSPHRASE} -lt 20 ]; then
+            echo "::error::SIGNING_PASSPHRASE must be at least 20 characters."; exit 1
+          fi
+          mkdir -p signing
+          tar -c -C ~/keystore release.keystore pass | \
+            openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:PASSPHRASE -out signing/keystore.tar.enc
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add signing/keystore.tar.enc
+          git commit -m "Store encrypted signing key [skip ci]"
+          git push
+          echo "Signing key saved permanently."
 
       - name: Import project
         run: ~/godot/godot --headless --import
