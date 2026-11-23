@@ -4,7 +4,7 @@ extends PanelContainer
 ##   D-pad up/down: slot     D-pad left/right: item (or none)
 ##   A: next colour          Y: new random face/skin/hair
 ##   Select or B: close
-## In the test gym every catalogue item is available; real runs will only offer
+## On the range every catalogue item is available; real runs will only offer
 ## what's in your inventory.
 
 var player: Player

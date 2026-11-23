@@ -47,7 +47,7 @@ class Bullet:
 	var color := Color(1, 1, 1, 0.8)
 
 
-var debug_enabled := false  ## Off in real levels; the test gym turns it on.
+var debug_enabled := false  ## Off in real levels; the shooting range turns it on.
 var bullets: Array[Bullet] = []
 var _trails: Array[Dictionary] = []
 var _trail_mesh: ImmediateMesh

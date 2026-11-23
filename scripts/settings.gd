@@ -8,7 +8,7 @@ const PATH := "user://settings.cfg"
 var look_sensitivity := 1.0     ## Multiplier on stick/mouse look speed.
 var invert_look_y := false
 var fov := 75.0                 ## Vertical field of view, degrees.
-var show_bullet_paths := true   ## In the test gym.
+var show_bullet_paths := true   ## On the shooting range.
 
 
 func _ready() -> void:

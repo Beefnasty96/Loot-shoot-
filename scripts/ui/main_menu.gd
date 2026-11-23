@@ -3,7 +3,7 @@ extends Node3D
 ## Settings holds the options and the Credits page. Works with the Thor's
 ## controls (D-pad + A/B) and the touchscreen.
 
-const GYM := "res://scenes/gym.tscn"
+const RANGE_SCENE := "res://scenes/shooting_range.tscn"
 const CREDITS := [
 	["LOOT SHOOT", ""],
 	["Game design", "Beefnasty96"],
@@ -119,7 +119,7 @@ func _page_main() -> Control:
 	sub.text = "Tactical roguelike - test build"
 	sub.add_theme_font_size_override("font_size", 22)
 	box.add_child(sub)
-	_button(box, "Play (test gym)", func(): get_tree().change_scene_to_file(GYM))
+	_button(box, "Play (range)", func(): get_tree().change_scene_to_file(RANGE_SCENE))
 	_button(box, "Settings", func(): _show("settings"))
 	_button(box, "Quit", func(): get_tree().quit())
 	return box.get_parent()
@@ -131,7 +131,7 @@ func _page_settings() -> Control:
 	_slider(box, "Look sensitivity", 0.3, 2.5, 0.05, Settings.look_sensitivity, func(v): Settings.look_sensitivity = v, "%.2fx")
 	_slider(box, "Field of view", 60.0, 95.0, 1.0, Settings.fov, func(v): Settings.fov = v, "%d deg")
 	_check(box, "Invert look up/down", Settings.invert_look_y, func(on): Settings.invert_look_y = on)
-	_check(box, "Bullet paths in test gym", Settings.show_bullet_paths, func(on): Settings.show_bullet_paths = on)
+	_check(box, "Bullet paths on the range", Settings.show_bullet_paths, func(on): Settings.show_bullet_paths = on)
 	_button(box, "Credits", func(): _show("credits"))
 	_button(box, "Back", func():
 		Settings.save_settings()

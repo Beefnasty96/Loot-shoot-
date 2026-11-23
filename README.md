@@ -12,9 +12,9 @@ Every push to `main` builds an APK automatically (GitHub Actions, about 5 minute
 2. Tap **LootShoot.apk** to download, then open it and install (allow your browser to install apps if asked).
 3. New builds install over the old one.
 
-## Current step: test gym (v0.3) - real ballistics
+## Current step: shooting range (v0.4)
 
-The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The gym is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
+The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
 
 | Thor control | Action |
 | --- | --- |
@@ -54,7 +54,7 @@ Gear (`scripts/character/`):
 | `Equipment` | Slots: head, face, shirt, jacket, vest, hands, legs, feet, back, belt, accessory; totals weight/storage |
 | `CharacterModel` | Builds the visuals: rebinds clothes to the character's skeleton, mounts rigid items on bones, hides covered regions, applies appearance, procedural pose (IK arms/legs, walk, crouch, aim) |
 
-Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. In the gym press **Select** for the gear menu.
+Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. On the range press **Select** for the gear menu.
 
 ## Ballistics
 
@@ -99,7 +99,7 @@ The `.blend` file is also committed if you want to open it in Blender.
 
 ## Layout
 
-- `scenes/gym.tscn` – test gym (built in `scripts/gym.gd`)
+- `scenes/shooting_range.tscn` – shooting range (built in `scripts/shooting_range.gd`)
 - `scripts/player.gd` – movement, camera rig, first/third person
 - `scripts/viewmodel.gd` – first-person arms + gun: hip/aim/sprint poses, sway, bob, wall pull-back
 - `scripts/weapons/firearm.gd` – 1911 logic: chamber/magazine, ammo selection, reload, aim/zero, spread, recoil, slide/hammer animation, flash, brass

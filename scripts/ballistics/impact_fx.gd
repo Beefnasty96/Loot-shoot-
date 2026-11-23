@@ -135,7 +135,7 @@ func _sound(key: String, pos: Vector3) -> void:
 	pl.play()
 
 
-## Glass shatters: hide it and turn off its collision, then restore it a few seconds later (test gym).
+## Glass shatters: hide it and turn off its collision, then restore it a few seconds later (shooting range).
 func _break(collider: Object) -> void:
 	var body := collider as CollisionObject3D
 	if body == null or body.get_meta("broken", false):

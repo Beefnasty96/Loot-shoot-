@@ -83,7 +83,7 @@ func _build_pause_panel() -> void:
 	var text := Label.new()
 	text.add_theme_font_size_override("font_size", 24)
 	text.text = "\n".join([
-		"PAUSED  -  Loot Shoot test gym v0.4",
+		"PAUSED  -  Loot Shoot shooting range v0.4",
 		"",
 		"Left stick ........ move            Right stick ....... look",
 		"R2 ................ fire            L2 ................ aim down sights",

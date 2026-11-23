@@ -1,5 +1,5 @@
 extends Node3D
-## Grey-box test gym, built in code: open yard with cover, a firing lane with
+## Grey-box shooting range, built in code: open yard with cover, a firing lane with
 ## distance markers, a two-room building with a roof, and stairs to a platform.
 ## Everything sits on a 1 m checker grid so distances are easy to judge.
 
@@ -288,7 +288,7 @@ func _build_dummies() -> void:
 
 
 ## A row of randomly generated people: same base body, different skin, hair,
-## beard, height and clothes every time the gym loads.
+## beard, height and clothes every time the range loads.
 func _build_civilians() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
