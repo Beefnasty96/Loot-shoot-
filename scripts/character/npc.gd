@@ -11,6 +11,10 @@ extends Node3D
 ## limp as a ragdoll and the push goes into the part that was hit, so a
 ## hollow point that stops in the chest shoves harder than ball ammo that
 ## passes through.
+##
+## Bleeding: each hit opens a wound (DamageModel) that bleeds onto their clothes
+## and drips onto the floor, pooling where they stand or lie. As blood runs low
+## they sag; at 40% lost they collapse and die.
 
 const HITBOXES := [
 	# zone, bone, centre (rest pose, rig space: +Z forward, +X = their left), size, gel factor
@@ -49,12 +53,14 @@ func _ready() -> void:
 	add_child(model)
 	add_to_group("npc")
 	_build_hitboxes()
+	damage.set_body_mass(model.body_mass_kg())
 
 
 ## New random person: looks, clothes and pocket contents.
 func randomize_person(rng: RandomNumberGenerator) -> void:
 	model.appearance.randomize(rng)
 	model.apply_appearance()
+	damage.set_body_mass(model.body_mass_kg())
 	model.random_outfit(rng)
 	var total := 0
 	for l: Array in LOOT:
@@ -103,6 +109,7 @@ func _build_hitboxes() -> void:
 
 
 func _process(delta: float) -> void:
+	_bleed(delta)
 	if dead or _stagger.length_squared() < 1e-6:
 		return
 	model.position += _stagger * delta
@@ -119,9 +126,42 @@ static func hit_impulse(info: Dictionary) -> float:
 	return float(info.get("momentum", 0.0)) + float(info.get("deposited", 0.0)) * ENERGY_PUSH
 
 
+func _bleed(delta: float) -> void:
+	if damage.wounds.is_empty():
+		return
+	var before: Array[float] = []
+	for w: Dictionary in damage.wounds:
+		before.append(w.lost)
+	damage.tick(delta)
+	for i in damage.wounds.size():
+		var w: Dictionary = damage.wounds[i]
+		var ml: float = w.lost - before[i]
+		if ml <= 0.0:
+			continue
+		Ballistics.blood.grow_stain(w)
+		w.drip_acc = w.get("drip_acc", 0.0) + ml
+		if w.drip_acc >= maxf(1.5, w.rate * 0.25):
+			var marks: Array = w.get("marks", [])
+			var from: Vector3 = (marks[0] as Node3D).global_position if not marks.is_empty() and is_instance_valid(marks[0]) else model.centre_world()
+			# Running blood drips off a little out from the body, not from inside it.
+			Ballistics.blood.drip(from + Vector3(randf_range(-0.04, 0.04), 0.0, randf_range(-0.04, 0.04)), w.drip_acc)
+			w.drip_acc = 0.0
+	if dead:
+		return
+	# Low on blood: they sag at the knees, then collapse.
+	var lost := 1.0 - damage.blood_fraction()
+	model.crouch = clampf((lost - 0.2) / 0.2, 0.0, 1.0) * 0.8
+	if damage.dead:
+		die()
+
+
 func take_hit(info: Dictionary) -> void:
 	var dir: Vector3 = info.get("direction", -global_transform.basis.z)
 	var push := hit_impulse(info)
+	var wound := DamageModel.make_wound(info)
+	damage.add_wound(wound)
+	Ballistics.blood.hit(info, wound)
+	info.bleed = ("ARTERIAL BLEED " if wound.heavy else "bleed ") + "%.1f ml/s" % wound.rate
 	if dead:
 		model.apply_ragdoll_impulse(dir * push, info.position, info.bone)
 		return

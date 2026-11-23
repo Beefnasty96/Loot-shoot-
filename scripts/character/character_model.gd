@@ -443,8 +443,6 @@ func _build_ragdoll() -> void:
 			pb.joint_type = PhysicalBone3D.JOINT_TYPE_CONE
 			pb.set("joint_constraints/swing_span", row[3])
 			pb.set("joint_constraints/twist_span", row[4])
-			pb.set("joint_constraints/softness", 0.9)
-			pb.set("joint_constraints/relaxation", 1.0)
 		pb.linear_damp = 0.15
 		pb.angular_damp = 2.5
 		pb.friction = 0.8

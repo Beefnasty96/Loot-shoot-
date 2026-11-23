@@ -53,11 +53,14 @@ var _trails: Array[Dictionary] = []
 var _trail_mesh: ImmediateMesh
 var _trail_instance: MeshInstance3D
 var fx: ImpactFX
+var blood: BloodFX
 
 
 func _ready() -> void:
 	fx = ImpactFX.new()
 	add_child(fx)
+	blood = BloodFX.new()
+	add_child(blood)
 	_trail_mesh = ImmediateMesh.new()
 	_trail_instance = MeshInstance3D.new()
 	_trail_instance.mesh = _trail_mesh
@@ -237,7 +240,8 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 	# Momentum handed to what was hit (kg·m/s): what the bullet lost, along its path.
 	info.momentum = ammo.mass_kg() * maxf(0.0, speed - info.speed_out)
 	if hitbox and hitbox.receiver and info.result != "ricochet":
-		info.damage = DamageModel.damage_for(info.deposited, _wound_ratio(b))
+		info.wound_ratio = _wound_ratio(b)
+		info.damage = DamageModel.damage_for(info.deposited, info.wound_ratio)
 		hitbox.receiver.take_hit(info)
 	fx.spawn(info)
 	impact.emit(info)
