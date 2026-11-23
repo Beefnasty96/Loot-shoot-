@@ -84,6 +84,11 @@ func _build() -> void:
 	for id in ["tshirt", "pants", "boots", "gloves"]:
 		var colour := {"tshirt": 3, "pants": 1, "boots": 0, "gloves": 0}[id] as int
 		character.equipment.equip(GearInstance.create(id, colour))
+	# Starting kit: two spare magazines and some painkillers in your pants pockets.
+	var pockets: Array = character.equipment.get_slot("legs").grids
+	pockets[0].place(InvItem.magazine(AmmoDB.get_ammo("45_1_fmj230"), 7), Vector2i.ZERO)
+	pockets[1].place(InvItem.magazine(AmmoDB.get_ammo("45_2_jhp230"), 7), Vector2i.ZERO)
+	pockets[2].place(InvItem.create("painkillers"), Vector2i.ZERO)
 
 	head = Node3D.new()
 	head.position.y = EYE_STAND
@@ -160,6 +165,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		shoulder = -shoulder
 	elif event.is_action_pressed("crouch"):
 		_set_crouch(not crouching)
+	elif event.is_action_pressed("interact"):
+		var target := interact_target()
+		if target and target.has_method("use"):
+			target.use(self)
+
+
+## Everything you carry: worn gear, what's in it, and the pistol.
+func carried_weight() -> float:
+	var kg := character.equipment.total_weight()
+	if firearm:
+		kg += firearm.carried_weight()
+	return kg
+
+
+## Nearest thing you can use with A (container or mirror), within reach in front of you.
+func interact_target() -> Node3D:
+	var best: Node3D = null
+	var best_d := 2.2
+	var fwd := -global_transform.basis.z
+	for n in get_tree().get_nodes_in_group("interactable"):
+		var node := n as Node3D
+		var at: Vector3 = node.interact_point() if node.has_method("interact_point") else node.global_position
+		var d := at - global_position
+		d.y = 0.0
+		var dist := d.length()
+		if dist < best_d and (dist < 0.8 or d.normalized().dot(fwd) > 0.3):
+			best = node
+			best_d = dist
+	return best
 
 
 func _move_input() -> Vector2:
@@ -251,6 +285,9 @@ func _physics_process(delta: float) -> void:
 	if input.length() < 0.1:
 		sprinting = false
 
+	var kg := carried_weight()
+	if sprinting and not Encumbrance.can_sprint(kg):
+		sprinting = false
 	var speed := walk_speed
 	if crouching:
 		speed = crouch_speed
@@ -258,6 +295,7 @@ func _physics_process(delta: float) -> void:
 		speed = sprint_speed
 	elif aiming:
 		speed = walk_speed * 0.6
+	speed *= Encumbrance.speed_factor(kg)
 
 	var dir := (transform.basis * Vector3(input.x, 0.0, input.y))
 	var target := dir * speed

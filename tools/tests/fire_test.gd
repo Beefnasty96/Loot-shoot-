@@ -1,11 +1,11 @@
 extends SceneTree
 var f := 0
-var gym
+var range_scene
 var p
 var impacts := []
 func _initialize():
-	gym = load("res://scenes/gym.tscn").instantiate()
-	root.add_child(gym)
+	range_scene = load("res://scenes/shooting_range.tscn").instantiate()
+	root.add_child(range_scene)
 	seed(3)
 func press(a):
 	var ev = InputEventAction.new(); ev.action = a; ev.pressed = true; ev.strength = 1.0
@@ -15,7 +15,7 @@ func release(a):
 	Input.parse_input_event(ev)
 func _process(_d):
 	f += 1
-	p = gym.player
+	p = range_scene.player
 	var fa = p.firearm
 	if f == 2:
 		root.get_node("/root/Ballistics").impact.connect(func(i): impacts.append(i))
@@ -56,7 +56,7 @@ func _process(_d):
 		print("mag check text: %s" % fa.mag_check_text.replace("\n", " | "))
 		# Zero check: ADS at a wall placed at exactly 25 yd, level.
 		var wall = StaticBody3D.new(); var cs = CollisionShape3D.new(); var sh = BoxShape3D.new(); sh.size = Vector3(4, 4, 0.2); cs.shape = sh; wall.add_child(cs)
-		wall.position = Vector3(-21, 1.67, 20.0 - 22.86 - 0.1); wall.set_meta("material", "concrete"); gym.add_child(wall)
+		wall.position = Vector3(-21, 1.67, 20.0 - 22.86 - 0.1); wall.set_meta("material", "concrete"); range_scene.add_child(wall)
 		p.global_position = Vector3(-21, 0.05, 20.0); p.rotation = Vector3.ZERO; p.pitch = 0
 		impacts.clear()
 	if f == 50 + 9 * 12 + 34 + 160 + 80:

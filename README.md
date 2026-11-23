@@ -12,9 +12,9 @@ Every push to `main` builds an APK automatically (GitHub Actions, about 5 minute
 2. Tap **LootShoot.apk** to download, then open it and install (allow your browser to install apps if asked).
 3. New builds install over the old one.
 
-## Current step: test gym (v0.3) - real ballistics
+## Current step: shooting range (v0.4)
 
-The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The gym is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
+The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
 
 | Thor control | Action |
 | --- | --- |
@@ -22,7 +22,8 @@ The game opens on a main menu (Play / Settings / Quit; Settings has look sensiti
 | X | Reload (hold: check magazine) |
 | D-pad left / right | Load for your **next** magazine |
 | D-pad down | Bullet paths + ballistics readout |
-| Select | Gear menu (Up/Down slot, Left/Right item, A colour, Y new look) |
+| Select | Inventory |
+| A | Search crate or body / pick up item / use (mirror: new look) |
 | Left stick | Move |
 | Right stick | Look |
 | L3 | Sprint (third person, standing still: swap shoulder) |
@@ -54,7 +55,35 @@ Gear (`scripts/character/`):
 | `Equipment` | Slots: head, face, shirt, jacket, vest, hands, legs, feet, back, belt, accessory; totals weight/storage |
 | `CharacterModel` | Builds the visuals: rebinds clothes to the character's skeleton, mounts rigid items on bones, hides covered regions, applies appearance, procedural pose (IK arms/legs, walk, crouch, aim) |
 
-Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. In the gym press **Select** for the gear menu.
+Test gear (built by `tools/blender/gear_build.py`): T-shirt, field jacket, cargo pants, work boots, gloves, beanie, chest rig, baseball cap, 25 L daypack. 
+
+## Inventory (grid, Tarkov-style)
+
+Press **Select** (or **A** at a crate). Worn gear on the left, the storage your gear gives you in the middle, an open container on the right.
+
+- **Storage comes from what you wear.** Cargo pants: 4 pockets + 2 cargo pockets. Field jacket: 2 chest + 2 hand pockets. Chest rig: 4 mag pouches, 2 utility, 1 admin pouch. Daypack: 4x5 main compartment. T-shirt/underwear: nothing.
+- **Items have a shape** (width x height squares) and can be rotated. Ammo stacks to 50. Magazines remember their rounds. Gear can be stored with its contents.
+- **Weight matters:** worn gear + contents + pistol. Up to 55 lb no penalty; 55-99 lb slower; over 99 lb overweight (no sprint, much slower). Same rule (`Encumbrance`) will apply to enemies.
+- **Reloads use real magazines** from your rig and pockets (not the backpack); the empty goes back where the full one was. D-pad left/right picks which load to reach for. Drop loose rounds on a magazine to load it; Y on a magazine unloads it.
+
+| Controller | Inventory action |
+| --- | --- |
+| D-pad / left stick | Move cursor |
+| A | Pick up / put down (on a slot: equip) |
+| Y | Rotate held item / unload magazine |
+| X | Quick move (crate <-> you; wearables from the crate go straight on) |
+| B / Select | Close |
+
+Touch: drag and drop, or tap to pick up and tap to drop.
+
+**The right-hand panel** is whatever you're searching:
+- a **container** (A at a crate),
+- a **body** (A at someone you've killed): their equipment slots plus their rig/pockets/backpack. Take anything, including what they're wearing; X on a worn item puts it straight on you if your slot is free,
+- otherwise the **Ground**: items lying within ~8 ft show up here, and anything you put here is dropped at your feet when you close. Dropped items lie in the world; stand over one and press A to pick it up.
+
+The range's random people (`Npc`) have hitboxes on their bones, the same body-part damage as the dummies, and random loot in whatever pockets their clothes have.
+
+Code: `scripts/inventory/` (ItemDef, ItemDB, InvItem, InvGrid, Encumbrance, LootContainer, WorldItem), `scripts/character/npc.gd`, `scripts/ui/inventory_screen.gd`. Icons: `tools/blender/render_icons.py` (gear, magazine) and `tools/icons/draw_icons.py` (loot, ammo).
 
 ## Ballistics
 
@@ -99,7 +128,7 @@ The `.blend` file is also committed if you want to open it in Blender.
 
 ## Layout
 
-- `scenes/gym.tscn` – test gym (built in `scripts/gym.gd`)
+- `scenes/shooting_range.tscn` – shooting range (built in `scripts/shooting_range.gd`)
 - `scripts/player.gd` – movement, camera rig, first/third person
 - `scripts/viewmodel.gd` – first-person arms + gun: hip/aim/sprint poses, sway, bob, wall pull-back
 - `scripts/weapons/firearm.gd` – 1911 logic: chamber/magazine, ammo selection, reload, aim/zero, spread, recoil, slide/hammer animation, flash, brass
@@ -119,4 +148,31 @@ godot --headless --import
 godot --headless -s tools/tests/flight_gel_test.gd   # velocity/energy/drop at 25/50/100 yd + gel depth per load
 godot --headless -s tools/tests/barrier_test.gd      # every load vs every barrier, then gel behind
 godot --headless --fixed-fps 60 -s tools/tests/fire_test.gd  # firing, slide lock, reload, mag check, 25 yd zero
+godot --headless --fixed-fps 60 -s tools/tests/inventory_test.gd  # grids, stacking, mag loading, reload from pockets, weight
+godot --headless --fixed-fps 60 -s tools/tests/loot_test.gd       # drop/pick up from the ground, shoot + search a body, take their backpack
+godot --headless --fixed-fps 60 -s tools/tests/ragdoll_test.gd    # body + gear mass, flinch, FMJ vs JHP push, ragdolls settle, corpses take hits
+godot --headless --fixed-fps 60 -s tools/tests/blood_test.gd      # wound bleed rates, arterial bleeds, clotting, bleeding out, blood decals
+godot --headless --fixed-fps 60 -s tools/tests/wounded_test.gd    # limp, limp arm, clutching wounds, hunching, going down, shock
 ```
+
+## Bodies and hit reactions
+
+Physics runs on Jolt. Every person weighs 78 kg × height³ (about 143–205 lb) plus what they wear and carry, spread over 14 ragdoll bodies by real body-segment shares (head 8%, trunk 50%, thigh 10% ...). A vest or loaded backpack makes the chest heavier, boots the feet, and so on.
+
+A hit pushes with the momentum the bullet lost plus 0.02 kg·m/s per joule it left behind. Alive, the struck part flinches by its own mass (an arm jerks more than a chest) and the person staggers by their total mass. Dead, they go limp and the push goes into the part that was hit; corpses keep their hitboxes, so you can still shoot them around.
+
+## Blood and bleeding
+
+Every bullet that hits a person opens a wound with a bleed rate in ml/s. The rate depends on the wound channel (an expanded hollow point bleeds about 2x ball), how long the channel is, the area hit (chest and belly bleed most) and whether it went through (two holes). Some hits open a major vessel, more often with bigger wound channels: an arterial bleed of 10–35 ml/s that doesn't clot. Light bleeds clot over a few minutes. People carry 70 ml of blood per kg; at 20% lost they start to sag, and at 40% lost they collapse and die.
+
+What you see: entry and exit holes and a stain that spreads on clothes as the wound bleeds (both follow the body and the ragdoll), mist at the entry, spray and a splatter on the wall behind exit wounds, drips that pool where someone stands or lies (sized by volume, about 2 mm deep), and puddles that darken as they dry. The debug hit list (D-pad down) shows each wound's bleed rate. `DamageModel.treat()` is ready for bandages, tourniquets and IFAKs once enemies can shoot back.
+
+## Acting wounded
+
+Shot but alive, people show it (CharacterModel `hurt`/`pain`/`shock`/`kneel`/`sit`/`clutch`, driven by Npc from its DamageModel):
+- **Leg:** weight shifts onto the good leg, the hurt foot rests on its toes, and they limp. A leg at 70% damage puts them on one knee. Both legs hurt, or one leg gone, puts them on the ground, propped up on a hand.
+- **Arm:** the arm hangs limp and the other hand holds the wound.
+- **Torso:** they hunch over with a hand pressed on the wound and curl toward it.
+- **Pain:** spikes with each hit, then settles: fast breathing and trembling.
+- **Blood loss (shock):** skin goes pale and the head droops. They sink to a knee, then to the floor, before bleeding out.
+- `DamageModel.mobility()` and `steadiness()` give move-speed and aim penalties for the AI (and the player later).

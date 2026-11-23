@@ -47,17 +47,20 @@ class Bullet:
 	var color := Color(1, 1, 1, 0.8)
 
 
-var debug_enabled := false  ## Off in real levels; the test gym turns it on.
+var debug_enabled := false  ## Off in real levels; the shooting range turns it on.
 var bullets: Array[Bullet] = []
 var _trails: Array[Dictionary] = []
 var _trail_mesh: ImmediateMesh
 var _trail_instance: MeshInstance3D
 var fx: ImpactFX
+var blood: BloodFX
 
 
 func _ready() -> void:
 	fx = ImpactFX.new()
 	add_child(fx)
+	blood = BloodFX.new()
+	add_child(blood)
 	_trail_mesh = ImmediateMesh.new()
 	_trail_instance = MeshInstance3D.new()
 	_trail_instance.mesh = _trail_mesh
@@ -166,10 +169,11 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 		speed_in = speed, energy_in = e_in, energy_out = 0.0, deposited = 0.0,
 		distance = b.distance, result = "", zone = "", thickness_mm = 0.0, depth_mm = 0.0,
 		expanded = false, clogged = b.clogged, deformed = b.deformed, damage = 0.0,
-		exit_pos = null, fx = props.fx,
+		exit_pos = null, fx = props.fx, direction = dir, bone = "", momentum = 0.0,
 	}
 	if hitbox:
 		info.zone = hitbox.zone
+		info.bone = hitbox.bone_name
 
 	var out := {}
 	var incidence := rad_to_deg(asin(clampf(-dir.dot(normal), 0.0, 1.0)))  # 0 = grazing, 90 = square
@@ -233,8 +237,11 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 	info.clogged = b.clogged
 	info.deformed = b.deformed
 	info.speed_out = b.vel.length() if b.alive else 0.0
+	# Momentum handed to what was hit (kg·m/s): what the bullet lost, along its path.
+	info.momentum = ammo.mass_kg() * maxf(0.0, speed - info.speed_out)
 	if hitbox and hitbox.receiver and info.result != "ricochet":
-		info.damage = DamageModel.damage_for(info.deposited, _wound_ratio(b))
+		info.wound_ratio = _wound_ratio(b)
+		info.damage = DamageModel.damage_for(info.deposited, info.wound_ratio)
 		hitbox.receiver.take_hit(info)
 	fx.spawn(info)
 	impact.emit(info)

@@ -319,7 +319,7 @@ def build():
     # ---------------- Magazine (single stack, 7 rounds) inside the grip
     mag_body = grip_box("MagBody", 2.0, 86.0, 7.0, 37.0, -7.0, 7.0, steel_mag)
     mag_base = grip_box("MagBase", 86.0, 90.0, 5.0, 41.0, -8.5, 8.5, steel_mag)
-    round_top = cyl_y("TopRound", 5.6, -14, 14, 0, -16.5, material("Brass", (0.75, 0.55, 0.22), None, 0.4, 0.6), seg=10)
+    round_top = cyl_y("TopRound", 5.6, -58, -29, 0, -24.0, material("Brass", (0.75, 0.55, 0.22), None, 0.4, 0.6), seg=10)
     for p in (mag_body, mag_base, round_top):
         smart_uv(p)
     magazine = join([mag_body, mag_base, round_top], "Magazine")

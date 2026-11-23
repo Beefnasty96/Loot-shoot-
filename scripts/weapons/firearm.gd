@@ -30,11 +30,28 @@ const MAX_CASINGS := 15
 
 var player: Player
 var ammo_types: Array[AmmoType] = []
-var selected := 0
+var selected := 0                    ## Preferred load: reloads pick a magazine of this type first.
 var chambered: AmmoType
-var mag_ammo: AmmoType
-var mag_count := CAPACITY
-var has_mag := true
+## The magazine in the gun is a real inventory item: reloads swap it with one from
+## your rig or pockets (never the backpack), and the old one goes back where the new one was.
+var mag_item: InvItem
+var mag_ammo: AmmoType:
+	get: return mag_item.mag_ammo if mag_item else null
+	set(v):
+		if mag_item:
+			mag_item.mag_ammo = v
+var mag_count: int:
+	get: return mag_item.mag_count if mag_item else 0
+	set(v):
+		if mag_item:
+			mag_item.mag_count = v
+var has_mag: bool:
+	get: return mag_item != null
+var notice := ""
+var notice_time := 0.0
+var _incoming: Dictionary = {}       ## {item, grid, pos} chosen when the reload starts
+var _outgoing: InvItem
+const WEIGHT_KG := 1.1               ## 1911 without magazine.
 var slide_locked := false
 var hammer_down := false
 var reloading := false
@@ -60,7 +77,7 @@ var _flash_tex: ImageTexture
 
 func _ready() -> void:
 	ammo_types = AmmoDB.all_for(CALIBER)
-	mag_ammo = ammo_types[0]
+	mag_item = InvItem.magazine(ammo_types[0], CAPACITY)
 	chambered = ammo_types[0]
 	for key in ["shot_45", "dry_fire", "mag_out", "mag_in", "slide_release", "casing"]:
 		var path := "res://assets/audio/%s.wav" % key
@@ -124,6 +141,52 @@ func next_ammo() -> AmmoType:
 	return ammo_types[selected]
 
 
+## Gun + magazine + chambered round.
+func carried_weight() -> float:
+	var kg := WEIGHT_KG
+	if mag_item:
+		kg += mag_item.weight()
+	if chambered:
+		kg += ItemDB.round_weight(chambered)
+	return kg
+
+
+## Loaded magazines you can reach for (rig and pockets).
+func spare_mags() -> Array:
+	var out: Array = []
+	for grid: InvGrid in player.character.equipment.grids(false):
+		for e in grid.entries:
+			var it: InvItem = e.item
+			if it.def.is_mag() and it.def.caliber == CALIBER and it.mag_count > 0:
+				out.append({item = it, grid = grid, pos = e.pos})
+	return out
+
+
+func spare_count(ammo: AmmoType) -> int:
+	var n := 0
+	for m in spare_mags():
+		if (m.item as InvItem).mag_ammo == ammo:
+			n += 1
+	return n
+
+
+func _best_mag() -> Dictionary:
+	var best := {}
+	var best_score := -1
+	for m in spare_mags():
+		var it: InvItem = m.item
+		var score := it.mag_count + (100 if it.mag_ammo == next_ammo() else 0)
+		if score > best_score:
+			best_score = score
+			best = m
+	return best
+
+
+func _notify(text: String) -> void:
+	notice = text
+	notice_time = 2.5
+
+
 func _process(delta: float) -> void:
 	if player == null:
 		return
@@ -138,12 +201,12 @@ func _process(delta: float) -> void:
 		return
 	if Input.is_action_just_pressed("fire"):
 		_try_fire(now)
+	if notice_time > 0.0:
+		notice_time -= delta
 	if Input.is_action_just_pressed("ammo_next"):
-		selected = (selected + 1) % ammo_types.size()
-		changed.emit()
+		_cycle_preferred(1)
 	if Input.is_action_just_pressed("ammo_prev"):
-		selected = (selected - 1 + ammo_types.size()) % ammo_types.size()
-		changed.emit()
+		_cycle_preferred(-1)
 
 	# Tap X to reload, hold to check the magazine.
 	if Input.is_action_just_pressed("reload"):
@@ -249,12 +312,26 @@ func _apply_spread(dir: Vector3) -> Vector3:
 
 # ------------------------------------------------------------------ reloading
 
+## D-pad left/right: step through the loads you're actually carrying in magazines.
+func _cycle_preferred(step: int) -> void:
+	for i in ammo_types.size():
+		selected = (selected + step + ammo_types.size()) % ammo_types.size()
+		if spare_count(ammo_types[selected]) > 0:
+			break
+	changed.emit()
+
+
 func _start_reload() -> void:
 	if reloading:
 		return
-	var same := has_mag and mag_count == CAPACITY and mag_ammo == next_ammo() and chambered != null
-	if same:
+	var best := _best_mag()
+	if best.is_empty():
+		_notify("No loaded magazines in your rig or pockets.")
 		return
+	var incoming: InvItem = best.item
+	if has_mag and mag_count >= incoming.mag_count and mag_ammo == incoming.mag_ammo and chambered != null:
+		return  # nothing better to swap to
+	_incoming = best
 	reloading = true
 	reload_progress = 0.0
 	_reload_stage = 0
@@ -271,13 +348,27 @@ func _update_reload(delta: float) -> void:
 		_play("mag_out")
 	if _reload_stage == 1 and p >= 0.32:
 		_reload_stage = 2
-		has_mag = false
+		_outgoing = mag_item
+		mag_item = null
 		changed.emit()
 	if _reload_stage == 2 and p >= 0.62:
 		_reload_stage = 3
-		has_mag = true
-		mag_ammo = next_ammo()
-		mag_count = CAPACITY
+		var grid: InvGrid = _incoming.grid
+		var incoming: InvItem = _incoming.item
+		grid.remove(incoming)
+		mag_item = incoming
+		# The old magazine goes back where the new one came from (or anywhere it fits).
+		if _outgoing:
+			if not grid.place(_outgoing, _incoming.pos):
+				var stored := false
+				for g: InvGrid in player.character.equipment.grids():
+					if g.auto_place(_outgoing):
+						stored = true
+						break
+				if not stored:
+					_notify("No room for the empty magazine: dropped it.")
+		_outgoing = null
+		_incoming = {}
 		_play("mag_in")
 		changed.emit()
 	if _reload_stage == 3 and _reload_empty and p >= 0.78:
