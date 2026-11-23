@@ -61,7 +61,7 @@ func _build_pause_panel() -> void:
 		"L1 / R1 ........... lean left / right",
 		"B ................. crouch",
 		"",
-		"Guns arrive in the next step.",
+		"Firing arrives in the next step.",
 		"START to resume",
 	])
 	_pause_panel.add_child(text)
@@ -92,4 +92,4 @@ func _process(_delta: float) -> void:
 	if player.effective_view() == Player.View.THIRD:
 		view += " (%s shoulder)" % shoulder
 	_status.text = "%s\n%s\nFPS %d" % [view, stance, Engine.get_frames_per_second()]
-	_crosshair.visible = not get_tree().paused
+	_crosshair.visible = not get_tree().paused and not player.aiming

@@ -33,7 +33,7 @@ PC testing: WASD, mouse, V view, Shift sprint, C shoulder, Q/E lean, Ctrl crouch
 
 | Weapon | Status | Preview |
 | --- | --- | --- |
-| M1911 (.45 ACP) | Model done (1,212 tris); not in game yet | `assets/weapons/m1911/preview.png` |
+| M1911 (.45 ACP) | In your hands (first + third person); firing next | `assets/weapons/m1911/preview.png` |
 
 Models are built by script with Blender's Python module, so they can be rebuilt or tweaked exactly:
 
@@ -42,7 +42,11 @@ pip install bpy numpy pillow
 python3 tools/blender/m1911_textures.py assets/weapons/m1911/textures
 python3 tools/blender/m1911_build.py assets/weapons/m1911
 python3 tools/blender/render_preview.py assets/weapons/m1911/m1911.blend /tmp/renders
+python3 tools/blender/arms_build.py assets/viewmodels/arms     # gloved first-person arms, rigged
+python3 tools/blender/render_fp.py assets/viewmodels/arms/arms.blend assets/weapons/m1911/m1911.blend /tmp/fp
 ```
+
+First-person arms: 1,120 tris, 34 bones (forearm, hand, 3 per finger), rigid skinning. Rest pose = two-handed 1911 grip; they share the gun's coordinate space, so both .glb files line up under one parent.
 
 The `.blend` file is also committed if you want to open it in Blender.
 
@@ -50,6 +54,7 @@ The `.blend` file is also committed if you want to open it in Blender.
 
 - `scenes/gym.tscn` – test gym (built in `scripts/gym.gd`)
 - `scripts/player.gd` – movement, camera rig, first/third person
+- `scripts/viewmodel.gd` – first-person arms + gun: hip/aim/sprint poses, sway, bob, wall pull-back
 - `scripts/hud.gd` – HUD and pause panel
 - `scripts/input_setup.gd` – all control bindings
 - `.github/workflows/android.yml` – APK build + release

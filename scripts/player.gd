@@ -49,6 +49,8 @@ var head: Node3D             ## Pitch + lean pivot at eye height.
 var fp_camera: Camera3D
 var _spring: SpringArm3D
 var tp_camera: Camera3D
+var viewmodel: Viewmodel
+var _tp_weapon: Node3D
 
 
 func _ready() -> void:
@@ -117,7 +119,19 @@ func _build() -> void:
 	tp_camera = Camera3D.new()
 	tp_camera.near = 0.05
 	tp_camera.fov = fov_normal
+	tp_camera.cull_mask = 0xFFFFF & ~Viewmodel.LAYER
 	_spring.add_child(tp_camera)
+
+	# First-person arms + gun on the first-person camera.
+	viewmodel = Viewmodel.new()
+	viewmodel.player = self
+	fp_camera.add_child(viewmodel)
+
+	# Third-person stand-in: the same pistol held out in front, following your aim.
+	_tp_weapon = (load("res://assets/weapons/m1911/m1911.glb") as PackedScene).instantiate()
+	_tp_weapon.position = Vector3(0.18, -0.28, -0.42)
+	head.add_child(_tp_weapon)
+	_set_layers(_tp_weapon, PLAYER_MODEL_LAYER)
 
 
 # ---------------------------------------------------------------- input
@@ -246,6 +260,13 @@ func _blocked_above() -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [get_rid()]
 	return not space.intersect_ray(query).is_empty()
+
+
+func _set_layers(node: Node, layer: int) -> void:
+	for child in node.get_children():
+		if child is VisualInstance3D:
+			child.layers = layer
+		_set_layers(child, layer)
 
 
 func effective_view() -> View:
