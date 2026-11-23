@@ -116,9 +116,10 @@ func _build_pause_panel() -> void:
 		_pause_panel.position = (get_viewport().get_visible_rect().size - _pause_panel.size) / 2.0)
 
 
-func open_inventory(container: LootContainer = null) -> void:
+## Open the inventory with something to search: a LootContainer, a dead Npc, or null for the ground.
+func open_inventory(target: Node = null) -> void:
 	if not inventory.is_open():
-		inventory.open(container)
+		inventory.open(target)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -126,7 +127,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("inventory") and not get_tree().paused:
 		var t := player.interact_target()
-		open_inventory(t as LootContainer)
+		var searchable: Node = t if (t is LootContainer or (t is Npc and (t as Npc).dead)) else null
+		open_inventory(searchable)
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):

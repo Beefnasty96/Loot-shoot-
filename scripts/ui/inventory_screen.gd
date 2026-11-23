@@ -1,7 +1,9 @@
 class_name InventoryScreen
 extends Control
 ## Tarkov-style inventory: worn gear on the left, the storage your gear gives you
-## (rig, pockets, backpack) in the middle, and an open container on the right.
+## (rig, pockets, backpack) in the middle, and on the right whatever you're
+## searching: a container, a body (its worn gear and pockets), or the ground.
+## Anything put on the Ground panel is dropped at your feet when you close.
 ##
 ## Controller:  D-pad / left stick move the cursor
 ##              A  pick up / put down        Y  rotate (or unload a magazine)
@@ -23,8 +25,13 @@ const CELL_BG := Color(0.13, 0.14, 0.13)
 const CELL_LINE := Color(0.24, 0.26, 0.23)
 const ACCENT := Color(0.85, 0.78, 0.45)
 
+const GROUND_RADIUS := 2.5
+
 var player: Player
-var container: LootContainer
+var source: Node                  ## LootContainer, Npc (body) or null (= the ground)
+var container: LootContainer      ## Set when the source is a container.
+var _ground: InvGrid
+var _ground_nodes := {}           ## InvItem -> WorldItem already lying there
 
 var _targets: Array = []          ## {kind: "cell"/"slot", rect, grid, cell, slot}
 var _grid_rects: Array = []       ## {grid, origin, label}
@@ -53,8 +60,11 @@ func is_open() -> bool:
 	return visible
 
 
-func open(with_container: LootContainer = null) -> void:
-	container = with_container
+func open(target: Node = null) -> void:
+	source = target
+	container = target as LootContainer
+	if target == null:
+		_build_ground()
 	visible = true
 	player.ui_locked = true
 	player.sprinting = false
@@ -68,9 +78,60 @@ func close() -> void:
 		_flash("No room to put that back. Find it a spot first.")
 		return
 	visible = false
+	if source == null:
+		_sync_ground()
 	container = null
+	source = null
 	player.ui_locked = false
 	changed.emit()
+
+
+func _body() -> Npc:
+	return source as Npc
+
+
+## Grids on the other side (container, body storage, or the ground).
+func _other_grids() -> Array:
+	if container:
+		return [container.grid]
+	if _body():
+		return _body().model.equipment.grids()
+	if source == null and _ground:
+		return [_ground]
+	return []
+
+
+func _build_ground() -> void:
+	_ground = InvGrid.new(12, 14, "Ground")
+	_ground_nodes.clear()
+	for n in get_tree().get_nodes_in_group("world_item"):
+		var w := n as WorldItem
+		if w.is_queued_for_deletion() or w.global_position.distance_to(player.global_position) > GROUND_RADIUS:
+			continue
+		if _ground.auto_place(w.item):
+			_ground_nodes[w.item] = w
+
+
+## Make the world match the Ground panel: new items are dropped at your feet,
+## items you took are removed from the floor.
+func _sync_ground() -> void:
+	var still := {}
+	var i := 0
+	for e in _ground.entries:
+		var it: InvItem = e.item
+		still[it] = true
+		if not _ground_nodes.has(it):
+			var a := TAU * (i / 7.0) + randf() * 0.4
+			var r := 0.45 + (i % 3) * 0.18
+			var fwd := -player.global_transform.basis.z
+			var at := player.global_position + fwd * 0.35 + Vector3(cos(a), 0.0, sin(a)) * r
+			WorldItem.spawn(it, at, player.get_parent())
+			i += 1
+	for it: InvItem in _ground_nodes:
+		if not still.has(it) and is_instance_valid(_ground_nodes[it]):
+			_ground_nodes[it].queue_free()
+	_ground_nodes.clear()
+	_ground = null
 
 
 # ------------------------------------------------------------------ layout
@@ -83,57 +144,67 @@ func _layout() -> void:
 	_targets.clear()
 	_grid_rects.clear()
 	_labels.clear()
-	var eq := _equipment()
-	# Equipment slots, two columns.
 	_label("EQUIPMENT", Vector2(COL_EQUIP, TOP - 34), 26, ACCENT)
+	_layout_slots(_equipment(), Vector2(COL_EQUIP, TOP), SLOT_SIZE, 2, 14)
+	_label("YOUR STORAGE", Vector2(COL_STORAGE, TOP - 34), 26, ACCENT)
+	var y := _layout_storage(_equipment(), COL_STORAGE, COL_LOOT - 40, TOP)
+	if y < 0:
+		_label("No pockets. Wear pants, a jacket, a rig or a backpack to carry things.", Vector2(COL_STORAGE, TOP), 18, Color(0.7, 0.6, 0.5))
+	if container:
+		_label(container.title.to_upper(), Vector2(COL_LOOT, TOP - 34), 26, ACCENT)
+		_add_grid(container.grid, Vector2(COL_LOOT, TOP), "")
+	elif _body():
+		_label("BODY", Vector2(COL_LOOT, TOP - 34), 26, Color(0.9, 0.5, 0.4))
+		var small := Vector2(104, 66)
+		_layout_slots(_body().model.equipment, Vector2(COL_LOOT, TOP), small, 4, 12)
+		var by := TOP + 3 * (small.y + 22) + 10
+		if _layout_storage(_body().model.equipment, COL_LOOT, size.x - 20, by) < 0:
+			_label("Nothing to carry things in.", Vector2(COL_LOOT, by + 10), 18, Color(0.55, 0.57, 0.52))
+	elif _ground:
+		_label("GROUND", Vector2(COL_LOOT, TOP - 34), 26, Color(0.7, 0.72, 0.6))
+		_label("Put things here to drop them. Items lying nearby show up here.", Vector2(COL_LOOT, TOP - 8), 14, Color(0.55, 0.57, 0.52))
+		_add_grid(_ground, Vector2(COL_LOOT, TOP + 8), "")
+	_cursor = clampi(_cursor, 0, _targets.size() - 1)
+
+
+func _layout_slots(eq: Equipment, origin: Vector2, slot_size: Vector2, cols: int, label_size: int) -> void:
 	for i in Equipment.SLOTS.size():
 		var slot: String = Equipment.SLOTS[i]
-		var pos := Vector2(COL_EQUIP + (i % 2) * (SLOT_SIZE.x + 14), TOP + (i / 2) * (SLOT_SIZE.y + 26))
-		_label(Equipment.SLOT_NAMES[slot].to_upper(), pos + Vector2(0, -4), 14, Color(0.7, 0.72, 0.66))
-		_targets.append({kind = "slot", slot = slot, rect = Rect2(pos + Vector2(0, 4), SLOT_SIZE)})
-	# Storage from what you wear.
-	var y := TOP
-	_label("YOUR STORAGE", Vector2(COL_STORAGE, TOP - 34), 26, ACCENT)
+		var pos := origin + Vector2((i % cols) * (slot_size.x + 12), (i / cols) * (slot_size.y + 22))
+		_label(Equipment.SLOT_NAMES[slot].to_upper(), pos + Vector2(0, -4), label_size, Color(0.7, 0.72, 0.66))
+		_targets.append({kind = "slot", slot = slot, eq = eq, rect = Rect2(pos + Vector2(0, 4), slot_size)})
+
+
+## Rig / pockets / backpack grids of `eq`, flowing between x0 and x1. Returns the next y, or -1 if none.
+func _layout_storage(eq: Equipment, x0: float, x1: float, y0: float) -> float:
+	var y := y0
 	var sections := [["RIG", ["vest"]], ["POCKETS", ["legs", "torso_outer", "torso_inner", "belt"]], ["BACKPACK", ["back"]]]
 	var any := false
 	for sec: Array in sections:
 		var grids: Array = []
-		var owners: Array = []
 		for slot: String in sec[1]:
 			var g: GearInstance = eq.get_slot(slot)
 			if g:
-				for grid: InvGrid in g.grids:
-					grids.append(grid)
-					owners.append(g.item.display_name)
+				grids.append_array(g.grids)
 		if grids.is_empty():
 			continue
 		any = true
-		_label(sec[0], Vector2(COL_STORAGE, y), 18, Color(0.8, 0.82, 0.75))
+		_label(sec[0], Vector2(x0, y), 18, Color(0.8, 0.82, 0.75))
 		y += 24
-		var x := COL_STORAGE
+		var x := x0
 		var row_h := 0.0
-		for gi in grids.size():
-			var grid: InvGrid = grids[gi]
+		for grid: InvGrid in grids:
 			var w := grid.size.x * CELL
 			var h := grid.size.y * CELL
-			if x + w > COL_LOOT - 40 and x > COL_STORAGE:
-				x = COL_STORAGE
+			if x + w > x1 and x > x0:
+				x = x0
 				y += row_h + 22
 				row_h = 0.0
 			_add_grid(grid, Vector2(x, y + 16), grid.label)
 			x += w + 12
 			row_h = maxf(row_h, h + 16)
 		y += row_h + 26
-	if not any:
-		_label("No pockets. Wear pants, a jacket, a rig or a backpack to carry things.", Vector2(COL_STORAGE, y), 18, Color(0.7, 0.6, 0.5))
-	# Container.
-	if container:
-		_label(container.title.to_upper(), Vector2(COL_LOOT, TOP - 34), 26, ACCENT)
-		_add_grid(container.grid, Vector2(COL_LOOT, TOP), "")
-	else:
-		_label("NEARBY", Vector2(COL_LOOT, TOP - 34), 26, Color(0.5, 0.52, 0.48))
-		_label("Nothing open. Walk up to a crate and press A.", Vector2(COL_LOOT, TOP), 18, Color(0.55, 0.57, 0.52))
-	_cursor = clampi(_cursor, 0, _targets.size() - 1)
+	return y if any else -1.0
 
 
 func _label(text: String, pos: Vector2, size: int, color: Color) -> void:
@@ -155,7 +226,7 @@ func _grid_origin(grid: InvGrid) -> Vector2:
 
 
 func _is_player_grid(grid: InvGrid) -> bool:
-	return container == null or grid != container.grid
+	return grid in _equipment().grids()
 
 
 # ------------------------------------------------------------------ drawing
@@ -184,7 +255,7 @@ func _draw() -> void:
 			continue
 		draw_rect(t.rect, CELL_BG)
 		draw_rect(t.rect, CELL_LINE, false, 2.0)
-		var g: GearInstance = _equipment().get_slot(t.slot)
+		var g: GearInstance = (t.eq as Equipment).get_slot(t.slot)
 		if g:
 			var it := InvItem.from_gear(g)
 			_draw_item_in(it, t.rect, true)
@@ -234,7 +305,7 @@ func _draw() -> void:
 	for i in lines.size():
 		draw_string(_font, Vector2(COL_EQUIP + 10, 906 + i * 24), lines[i], HORIZONTAL_ALIGNMENT_LEFT, 350, 18 if i else 20,
 			ACCENT if i == 0 else Color(0.85, 0.87, 0.8))
-	var hints := "A pick up/put down    Y rotate / unload mag    X quick move / equip    B close    Drop rounds on a mag to load it"
+	var hints := "A pick up/put down    Y rotate / unload mag    X quick move (to ground/crate/body and back)    B close    Rounds on a mag = load it"
 	draw_string(_font, Vector2(COL_STORAGE, size.y - 24), hints, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.6, 0.62, 0.57))
 	if _message_time > 0.0:
 		draw_string(_font, Vector2(COL_STORAGE, size.y - 60), _message, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.7, 0.4))
@@ -379,7 +450,7 @@ func _move_cursor(action: String) -> void:
 func _item_at_target(t: Dictionary) -> InvItem:
 	if t.kind == "cell":
 		return (t.grid as InvGrid).item_at(t.cell)
-	var g: GearInstance = _equipment().get_slot(t.slot)
+	var g: GearInstance = (t.eq as Equipment).get_slot(t.slot)
 	return InvItem.from_gear(g) if g else null
 
 
@@ -394,12 +465,13 @@ func _pick() -> void:
 		_held_from = {grid = grid, pos = e.pos, rotated = _held.rotated}
 		grid.remove(_held)
 	else:
-		var g: GearInstance = _equipment().get_slot(t.slot)
+		var eq: Equipment = t.eq
+		var g: GearInstance = eq.get_slot(t.slot)
 		if g == null:
 			return
 		_held = InvItem.from_gear(g)
-		_held_from = {slot = t.slot}
-		_equipment().unequip(t.slot)
+		_held_from = {slot = t.slot, eq = eq}
+		eq.unequip(t.slot)
 		_relayout()
 	_changed()
 
@@ -427,10 +499,11 @@ func _drop() -> void:
 		if not _held.def.is_gear() or GearDB.get_item(_held.def.gear_id).slot != t.slot:
 			_flash("That doesn't go there.")
 			return
-		var old: GearInstance = _equipment().get_slot(t.slot)
-		_equipment().equip(_held.gear)
+		var eq: Equipment = t.eq
+		var old: GearInstance = eq.get_slot(t.slot)
+		eq.equip(_held.gear)
 		_held = InvItem.from_gear(old) if old else null
-		_held_from = {slot = t.slot} if old else {}
+		_held_from = {slot = t.slot, eq = eq} if old else {}
 		_relayout()
 		_changed()
 		return
@@ -465,8 +538,8 @@ func _drop() -> void:
 
 
 func _return_held() -> bool:
-	if _held_from.has("slot") and _equipment().get_slot(_held_from.slot) == null and _held.gear:
-		_equipment().equip(_held.gear)
+	if _held_from.has("slot") and (_held_from.eq as Equipment).get_slot(_held_from.slot) == null and _held.gear:
+		(_held_from.eq as Equipment).equip(_held.gear)
 		_held = null
 		_relayout()
 		return true
@@ -477,7 +550,7 @@ func _return_held() -> bool:
 			_held = null
 			return true
 		_held.rotated = rot
-	if _store(_held, true) or (container and _store_in([container.grid], _held)):
+	if _store(_held, true) or _store_in(_other_grids(), _held):
 		_held = null
 		return true
 	return false
@@ -503,16 +576,25 @@ func _quick_move() -> void:
 		return
 	var t: Dictionary = _targets[_cursor]
 	if t.kind == "slot":
-		var g: GearInstance = _equipment().get_slot(t.slot)
+		var eq: Equipment = t.eq
+		var g: GearInstance = eq.get_slot(t.slot)
 		if g == null:
 			return
 		var it := InvItem.from_gear(g)
-		_equipment().unequip(t.slot)
-		if (container and _store_in([container.grid], it)) or _store(it):
-			_flash("Took off %s." % g.item.display_name)
+		eq.unequip(t.slot)
+		var ok := false
+		if eq == _equipment():
+			ok = _store_in(_other_grids(), it) or _store(it)
+		elif _equipment().get_slot(t.slot) == null:
+			_equipment().equip(g)  # take it off the body and put it straight on
+			ok = true
 		else:
-			_equipment().equip(g)
-			_flash("No room to put it.")
+			ok = _store(it)
+		if ok:
+			_flash("Moved %s." % g.item.display_name)
+		else:
+			eq.equip(g)
+			_flash("No room for it.")
 		_relayout()
 		_changed()
 		return
@@ -532,8 +614,8 @@ func _quick_move() -> void:
 			ok = true
 		else:
 			ok = _store(it)
-	elif container:
-		ok = _store_in([container.grid], it)
+	else:
+		ok = _store_in(_other_grids(), it)
 	if not ok:
 		if not grid.place(it, old_pos):
 			grid.auto_place(it)
@@ -549,8 +631,7 @@ func _unload_mag() -> void:
 	var rounds := InvItem.rounds(it.mag_ammo.id, it.mag_count)
 	var grids: Array = [t.grid] if t.kind == "cell" else []
 	grids.append_array(_equipment().grids())
-	if container:
-		grids.append(container.grid)
+	grids.append_array(_other_grids())
 	if _store_in(grids, rounds):
 		_flash("Unloaded %d rounds." % it.mag_count)
 		it.mag_count = 0

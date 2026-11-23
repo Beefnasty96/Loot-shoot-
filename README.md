@@ -23,7 +23,7 @@ The game opens on a main menu (Play / Settings / Quit; Settings has look sensiti
 | D-pad left / right | Load for your **next** magazine |
 | D-pad down | Bullet paths + ballistics readout |
 | Select | Inventory |
-| A | Search crate / use (mirror: new look) |
+| A | Search crate or body / pick up item / use (mirror: new look) |
 | Left stick | Move |
 | Right stick | Look |
 | L3 | Sprint (third person, standing still: swap shoulder) |
@@ -76,7 +76,14 @@ Press **Select** (or **A** at a crate). Worn gear on the left, the storage your 
 
 Touch: drag and drop, or tap to pick up and tap to drop.
 
-Code: `scripts/inventory/` (ItemDef, ItemDB, InvItem, InvGrid, Encumbrance, LootContainer), `scripts/ui/inventory_screen.gd`. Icons: `tools/blender/render_icons.py` (gear, magazine) and `tools/icons/draw_icons.py` (loot, ammo).
+**The right-hand panel** is whatever you're searching:
+- a **container** (A at a crate),
+- a **body** (A at someone you've killed): their equipment slots plus their rig/pockets/backpack. Take anything, including what they're wearing; X on a worn item puts it straight on you if your slot is free,
+- otherwise the **Ground**: items lying within ~8 ft show up here, and anything you put here is dropped at your feet when you close. Dropped items lie in the world; stand over one and press A to pick it up.
+
+The range's random people (`Npc`) have hitboxes on their bones, the same body-part damage as the dummies, and random loot in whatever pockets their clothes have.
+
+Code: `scripts/inventory/` (ItemDef, ItemDB, InvItem, InvGrid, Encumbrance, LootContainer, WorldItem), `scripts/character/npc.gd`, `scripts/ui/inventory_screen.gd`. Icons: `tools/blender/render_icons.py` (gear, magazine) and `tools/icons/draw_icons.py` (loot, ammo).
 
 ## Ballistics
 
@@ -142,4 +149,5 @@ godot --headless -s tools/tests/flight_gel_test.gd   # velocity/energy/drop at 2
 godot --headless -s tools/tests/barrier_test.gd      # every load vs every barrier, then gel behind
 godot --headless --fixed-fps 60 -s tools/tests/fire_test.gd  # firing, slide lock, reload, mag check, 25 yd zero
 godot --headless --fixed-fps 60 -s tools/tests/inventory_test.gd  # grids, stacking, mag loading, reload from pockets, weight
+godot --headless --fixed-fps 60 -s tools/tests/loot_test.gd       # drop/pick up from the ground, shoot + search a body, take their backpack
 ```

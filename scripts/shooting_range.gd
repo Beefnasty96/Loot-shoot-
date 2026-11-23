@@ -289,19 +289,18 @@ func _build_dummies() -> void:
 
 
 ## A row of randomly generated people: same base body, different skin, hair,
-## beard, height and clothes every time the range loads.
+## beard, height, clothes and pocket contents every time the range loads.
+## They can be shot (same body-part damage as the dummies) and searched.
 func _build_civilians() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	for i in 5:
-		var c := CharacterModel.new()
-		c.position = Vector3(9.5 + i * 2.2, 0.0, 11.5)
-		c.rotation.y = PI  # face the spawn
-		add_child(c)
-		c.appearance.randomize(rng)
-		c.apply_appearance()
-		c.random_outfit(rng)
-	_label("RANDOM CIVILIANS", Vector3(13.9, 2.4, 11.5), 56)
+		var n := Npc.new()
+		n.position = Vector3(9.5 + i * 2.2, 0.0, 11.5)
+		n.rotation.y = PI  # face the spawn
+		add_child(n)
+		n.randomize_person(rng)
+	_label("LOOT TEST - shoot them, then search the bodies (A)", Vector3(13.9, 2.4, 11.5), 44)
 
 
 ## Supply crate (A to search) and a mirror (A for a new look) next to spawn.

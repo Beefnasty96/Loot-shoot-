@@ -55,6 +55,18 @@ func grids(include_back := true) -> Array:
 	return out
 
 
+## Put an item into worn storage: top up matching stacks first, then the first spot it fits.
+func store(item: InvItem, include_back := true) -> bool:
+	var gs := grids(include_back)
+	for grid: InvGrid in gs:
+		if grid.merge_stacks(item) == 0:
+			return true
+	for grid: InvGrid in gs:
+		if grid.auto_place(item):
+			return true
+	return false
+
+
 func storage_cells() -> int:
 	var n := 0
 	for grid: InvGrid in grids():
