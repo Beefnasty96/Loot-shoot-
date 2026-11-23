@@ -43,13 +43,16 @@ func spawn(info: Dictionary) -> void:
 	var normal: Vector3 = info.normal
 	var pos: Vector3 = info.position
 	var result: String = info.result
-	if result != "disintegrated":
+	var person := info.collider is Hitbox
+	if result != "disintegrated" and not person:
 		_decal(pos, normal, info.collider, props.fx)
 	if info.exit_pos != null:
 		var dir: Vector3 = (info.exit_pos - pos).normalized()
-		_decal(info.exit_pos, dir, info.collider, props.fx, 1.3)
-		_puff(info.exit_pos, dir, props, 0.6)
-	_puff(pos, normal, props, 1.0)
+		if not person:
+			_decal(info.exit_pos, dir, info.collider, props.fx, 1.3)
+			_puff(info.exit_pos, dir, props, 0.6)
+	if not person:
+		_puff(pos, normal, props, 1.0)
 	_sound("ricochet" if result == "ricochet" else String(props.fx), pos)
 	if props.get("breakable", false) and result != "ricochet":
 		_break(info.collider)

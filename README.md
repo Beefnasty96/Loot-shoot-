@@ -151,6 +151,8 @@ godot --headless --fixed-fps 60 -s tools/tests/fire_test.gd  # firing, slide loc
 godot --headless --fixed-fps 60 -s tools/tests/inventory_test.gd  # grids, stacking, mag loading, reload from pockets, weight
 godot --headless --fixed-fps 60 -s tools/tests/loot_test.gd       # drop/pick up from the ground, shoot + search a body, take their backpack
 godot --headless --fixed-fps 60 -s tools/tests/ragdoll_test.gd    # body + gear mass, flinch, FMJ vs JHP push, ragdolls settle, corpses take hits
+godot --headless --fixed-fps 60 -s tools/tests/blood_test.gd      # wound bleed rates, arterial bleeds, clotting, bleeding out, blood decals
+godot --headless --fixed-fps 60 -s tools/tests/wounded_test.gd    # limp, limp arm, clutching wounds, hunching, going down, shock
 ```
 
 ## Bodies and hit reactions
@@ -158,3 +160,19 @@ godot --headless --fixed-fps 60 -s tools/tests/ragdoll_test.gd    # body + gear 
 Physics runs on Jolt. Every person weighs 78 kg × height³ (about 143–205 lb) plus what they wear and carry, spread over 14 ragdoll bodies by real body-segment shares (head 8%, trunk 50%, thigh 10% ...). A vest or loaded backpack makes the chest heavier, boots the feet, and so on.
 
 A hit pushes with the momentum the bullet lost plus 0.02 kg·m/s per joule it left behind. Alive, the struck part flinches by its own mass (an arm jerks more than a chest) and the person staggers by their total mass. Dead, they go limp and the push goes into the part that was hit; corpses keep their hitboxes, so you can still shoot them around.
+
+## Blood and bleeding
+
+Every bullet that hits a person opens a wound with a bleed rate in ml/s. The rate depends on the wound channel (an expanded hollow point bleeds about 2x ball), how long the channel is, the area hit (chest and belly bleed most) and whether it went through (two holes). Some hits open a major vessel, more often with bigger wound channels: an arterial bleed of 10–35 ml/s that doesn't clot. Light bleeds clot over a few minutes. People carry 70 ml of blood per kg; at 20% lost they start to sag, and at 40% lost they collapse and die.
+
+What you see: entry and exit holes and a stain that spreads on clothes as the wound bleeds (both follow the body and the ragdoll), mist at the entry, spray and a splatter on the wall behind exit wounds, drips that pool where someone stands or lies (sized by volume, about 2 mm deep), and puddles that darken as they dry. The debug hit list (D-pad down) shows each wound's bleed rate. `DamageModel.treat()` is ready for bandages, tourniquets and IFAKs once enemies can shoot back.
+
+## Acting wounded
+
+Shot but alive, people show it (CharacterModel `hurt`/`pain`/`shock`/`kneel`/`sit`/`clutch`, driven by Npc from its DamageModel):
+- **Leg:** weight shifts onto the good leg, the hurt foot rests on its toes, and they limp. A leg at 70% damage puts them on one knee. Both legs hurt, or one leg gone, puts them on the ground, propped up on a hand.
+- **Arm:** the arm hangs limp and the other hand holds the wound.
+- **Torso:** they hunch over with a hand pressed on the wound and curl toward it.
+- **Pain:** spikes with each hit, then settles: fast breathing and trembling.
+- **Blood loss (shock):** skin goes pale and the head droops. They sink to a knee, then to the floor, before bleeding out.
+- `DamageModel.mobility()` and `steadiness()` give move-speed and aim penalties for the AI (and the player later).
