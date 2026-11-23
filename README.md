@@ -14,7 +14,7 @@ Every push to `main` builds an APK automatically (GitHub Actions, about 5 minute
 
 ## Current step: test gym (v0.3) - real ballistics
 
-A grey-box yard with cover, a firing lane with target dummies at 10/20/30 m, a **barrier test row** (drywall stud wall, 19 mm plywood, 6 mm glass, car door, 3 mm and 6 mm steel, 100 mm brick, 150 mm concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
+The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The gym is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
 
 | Thor control | Action |
 | --- | --- |
@@ -33,6 +33,8 @@ A grey-box yard with cover, a firing lane with target dummies at 10/20/30 m, a *
 | Start | Pause + controls |
 
 PC testing: WASD, mouse, V view, Shift sprint, C shoulder, Q/E lean, Ctrl crouch, right mouse aim, Esc pause.
+
+All measurements shown in game are US units (feet, inches, pounds, fps, ft-lbs); the engine works in metres internally (`scripts/units.gd`).
 
 ## Characters and gear
 

@@ -112,4 +112,4 @@ func _refresh() -> void:
 		_rows.add_child(l)
 	var sel := eq.get_slot(Equipment.SLOTS[_slot])
 	var desc := sel.item.description if sel else ("Nothing to wear here yet." if GearDB.for_slot(Equipment.SLOTS[_slot]).is_empty() else "Empty.")
-	_info.text = "\n%s\nWorn: %.1f kg   Storage: %d L" % [desc, eq.total_weight(), roundi(eq.total_capacity())]
+	_info.text = "\n%s\nWorn: %s   Storage: %d L" % [desc, Units.pounds(eq.total_weight()), roundi(eq.total_capacity())]

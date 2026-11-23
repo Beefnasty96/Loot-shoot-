@@ -95,9 +95,9 @@ func _build_pause_panel() -> void:
 		"L1 / R1 ........... lean         B ......... crouch",
 		"SELECT ............ gear (clothes, bags, hats)",
 		"",
-		"Sights are zeroed at 25 yd for 230gr ball.",
+		"Sights are zeroed at 25 yd (75 ft) for 230gr ball.",
 		"Bullet paths: white = flying, orange = after penetrating, yellow = ricochet.",
-		"START to resume",
+		"START to resume      Y: quit to main menu",
 	])
 	_pause_panel.add_child(text)
 	add_child(_pause_panel)
@@ -115,6 +115,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if paused and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
+	elif get_tree().paused and event.is_action_pressed("switch_weapon"):
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 	elif event.is_action_pressed("toggle_debug"):
 		Ballistics.debug_enabled = not Ballistics.debug_enabled
 
@@ -125,9 +128,9 @@ func _on_impact(info: Dictionary) -> void:
 	var line := "%s %s: %d fps, %d ft-lb in" % [a.short_name, what, roundi(AmmoType.ms_to_fps(info.speed_in)), roundi(AmmoType.j_to_ftlb(info.energy_in))]
 	match info.result:
 		"penetrated":
-			line += " -> through %d mm, %d fps out" % [roundi(info.thickness_mm), roundi(AmmoType.ms_to_fps(info.speed_out))]
+			line += " -> through %s, %d fps out" % [Units.inches(info.thickness_mm), roundi(AmmoType.ms_to_fps(info.speed_out))]
 		"stopped":
-			line += " -> stopped at %d mm" % roundi(info.depth_mm)
+			line += " -> stopped at %s" % Units.inches(info.depth_mm)
 		"ricochet":
 			line += " -> RICOCHET"
 		"disintegrated":
@@ -140,7 +143,7 @@ func _on_impact(info: Dictionary) -> void:
 		line += " [deformed]"
 	if info.zone != "":
 		line += " -%d HP" % roundi(info.damage)
-	line += "  (%d m)" % roundi(info.distance)
+	line += "  (%s)" % Units.feet(info.distance)
 	_hit_lines.push_front(line)
 	if _hit_lines.size() > 6:
 		_hit_lines.resize(6)
