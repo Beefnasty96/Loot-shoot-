@@ -15,7 +15,7 @@ var _wall_ballistic := "concrete"  ## Ballistic material used by _wall_x / _wall
 
 func _ready() -> void:
 	DisplayServer.screen_set_keep_on(true)
-	Ballistics.debug_enabled = true  # bullet paths + readout on by default in the test gym
+	Ballistics.debug_enabled = Settings.show_bullet_paths  # bullet paths + readout (Settings, default on)
 	_mat_floor = _checker_material(Color(0.42, 0.42, 0.40), Color(0.36, 0.36, 0.34), 1.0)
 	_mat_wall = _checker_material(Color(0.62, 0.60, 0.55), Color(0.56, 0.54, 0.50), 1.0)
 	_mat_cover = _checker_material(Color(0.55, 0.42, 0.26), Color(0.48, 0.36, 0.22), 0.5)
@@ -149,13 +149,13 @@ func _build_yard() -> void:
 
 
 func _build_lane() -> void:
-	# Firing lane down the west side: posts every 10 m from the line at z = 18.
+	# Firing lane down the west side: posts at 25 / 50 / 75 ft from the line at z = 18.
 	_box(Vector3(6, 0.05, 0.2), Vector3(-14, 0.03, 18), _mat_accent)  # firing line
 	_label("FIRING LINE", Vector3(-14, 1.2, 18.5), 64)
-	for d: int in [10, 20, 30]:
-		var z: float = 18.0 - d
+	for ft: int in [25, 50, 75]:
+		var z: float = 18.0 - ft * Units.FT_TO_M
 		_box(Vector3(0.25, 2.0, 0.25), Vector3(-17, 1.0, z), _mat_accent)
-		_label("%d m" % d, Vector3(-17, 2.5, z))
+		_label("%d ft" % ft, Vector3(-17, 2.5, z))
 	# Backstop.
 	_box(Vector3(8, 3, 0.6), Vector3(-14, 1.5, -15), _mat_wall)
 
@@ -249,14 +249,14 @@ func _build_barriers() -> void:
 	var conc := _mat_wall
 	# name, ballistic material, sheet thickness (m), sheets, gap between sheets (m), look
 	var rows := [
-		["DRYWALL\nstud wall", "drywall", 0.0127, 2, 0.09, white],
-		["PLYWOOD\n19 mm", "plywood", 0.019, 1, 0.0, ply],
-		["GLASS\n6 mm", "glass", 0.006, 1, 0.0, glass],
-		["CAR DOOR\n2 x 0.8 mm", "sheet_metal", 0.0008, 2, 0.1, car],
-		["STEEL\n3 mm", "steel", 0.003, 1, 0.0, steel],
-		["STEEL\n6 mm", "steel", 0.006, 1, 0.0, steel],
-		["BRICK\n100 mm", "brick", 0.1, 1, 0.0, brick],
-		["CONCRETE\n150 mm", "concrete", 0.15, 1, 0.0, conc],
+		["DRYWALL\n2 x 1/2 in stud wall", "drywall", 0.5 * Units.IN_TO_M, 2, 3.5 * Units.IN_TO_M, white],
+		["PLYWOOD\n3/4 in", "plywood", 0.75 * Units.IN_TO_M, 1, 0.0, ply],
+		["GLASS\n1/4 in", "glass", 0.25 * Units.IN_TO_M, 1, 0.0, glass],
+		["CAR DOOR\n2 x 22 gauge", "sheet_metal", 0.03 * Units.IN_TO_M, 2, 4.0 * Units.IN_TO_M, car],
+		["STEEL\n1/8 in", "steel", 0.125 * Units.IN_TO_M, 1, 0.0, steel],
+		["STEEL\n1/4 in", "steel", 0.25 * Units.IN_TO_M, 1, 0.0, steel],
+		["BRICK\n4 in", "brick", 4.0 * Units.IN_TO_M, 1, 0.0, brick],
+		["CONCRETE\n6 in", "concrete", 6.0 * Units.IN_TO_M, 1, 0.0, conc],
 	]
 	var z := -4.0
 	for i in rows.size():
@@ -276,10 +276,10 @@ func _build_barriers() -> void:
 
 
 func _build_dummies() -> void:
-	# Firing lane: 10 / 20 / 30 m.
-	for d in [10, 20, 30]:
+	# Firing lane: 25 / 50 / 75 ft.
+	for ft: int in [25, 50, 75]:
 		var dummy := TargetDummy.new()
-		dummy.position = Vector3(-14.0, 0.0, 18.0 - d)
+		dummy.position = Vector3(-14.0, 0.0, 18.0 - ft * Units.FT_TO_M)
 		add_child(dummy)
 	# Inside the house, behind the drywall partition: shoot it from the front room.
 	var hidden := TargetDummy.new()

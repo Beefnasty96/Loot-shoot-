@@ -7,13 +7,14 @@ config_version=5
 
 config/name="Loot Shoot"
 config/version="0.1.0"
-run/main_scene="res://scenes/gym.tscn"
+run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 
 [autoload]
 
 InputSetup="*res://scripts/input_setup.gd"
 Ballistics="*res://scripts/ballistics/ballistics.gd"
+Settings="*res://scripts/settings.gd"
 
 [display]
 

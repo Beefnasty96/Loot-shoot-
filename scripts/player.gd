@@ -137,8 +137,9 @@ func _build() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var s := aim_look_scale if aiming else 1.0
-		_turn(-event.relative.x * mouse_sensitivity * s, -event.relative.y * mouse_sensitivity * s)
+		var s := (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
+		var inv := -1.0 if Settings.invert_look_y else 1.0
+		_turn(-event.relative.x * mouse_sensitivity * s, -event.relative.y * mouse_sensitivity * s * inv)
 	elif event is InputEventMouseButton and event.pressed and OS.has_feature("pc"):
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -185,8 +186,9 @@ func _process(delta: float) -> void:
 	var look := Input.get_vector("look_left", "look_right", "look_up", "look_down")
 	if look.length() > 0.0:
 		look = look.normalized() * pow(look.length(), 2.0)
-		var speed := look_speed_deg * (aim_look_scale if aiming else 1.0)
-		_turn(-look.x * speed * delta, -look.y * speed * delta)
+		var speed := look_speed_deg * (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
+		var inv := -1.0 if Settings.invert_look_y else 1.0
+		_turn(-look.x * speed * delta, -look.y * speed * delta * inv)
 
 	if _recoil_recover > 0.0:
 		var settle := minf(_recoil_recover, delta * 14.0)
@@ -239,8 +241,9 @@ func _process(delta: float) -> void:
 	character.move_speed = Vector2(velocity.x, velocity.z).length()
 	character.crouch = move_toward(character.crouch, 1.0 if crouching else 0.0, delta * 5.0)
 
-	var target_fov := fov_aim if aiming else fov_normal
+	var target_fov := fov_aim * Settings.fov / 75.0 if aiming else Settings.fov
 	fp_camera.fov = lerpf(fp_camera.fov, target_fov, minf(1.0, delta * 12.0))
+	tp_camera.fov = Settings.fov
 
 
 func _physics_process(delta: float) -> void:
