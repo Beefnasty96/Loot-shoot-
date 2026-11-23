@@ -26,6 +26,8 @@ var _sway_rot := Vector2.ZERO
 var _last_yaw := 0.0
 var _last_pitch := 0.0
 var _bob_t := 0.0
+var _kick := 0.0         ## Recoil impulse, decays quickly.
+var _kick_vel := 0.0
 
 
 func _ready() -> void:
@@ -83,7 +85,7 @@ func _process(delta: float) -> void:
 	var cam := get_parent() as Node3D
 	var from := cam.global_position
 	var to := from - cam.global_transform.basis.z * WALL_CHECK
-	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var query := PhysicsRayQueryParameters3D.create(from, to, 1)  # level geometry only (not casings or dummies)
 	query.exclude = [player.get_rid()]
 	var hit := space.intersect_ray(query)
 	if not hit.is_empty():
@@ -96,14 +98,33 @@ func _process(delta: float) -> void:
 	pos += bob
 	pos += Vector3(_sway_rot.x * 0.05, -_sway_rot.y * 0.04, 0.0)  # lag behind the turn
 	pos += Vector3(0.0, -0.06, 0.12) * wall_k
+
+	# Recoil: a damped spring so the gun snaps up and settles.
+	_kick_vel += (-_kick * 260.0 - _kick_vel * 22.0) * delta
+	_kick += _kick_vel * delta
+	var kick_k := _kick * lerpf(1.0, 0.6, aim_k)
+	pos += Vector3(0.0, 0.01, 0.05) * kick_k
+
+	# Reload pose: tilt the gun to show the magazine well.
+	var reload_k := 0.0
+	if player.firearm:
+		reload_k = smoothstep(0.0, 1.0, player.firearm.reload_pose())
+	pos += Vector3(-0.02, 0.025, 0.03) * reload_k
 	position = pos
 
 	var rot := (HIP_ROT * (1.0 - aim_k)).lerp(SPRINT_ROT, sprint_k)
+	rot += Vector3(14.0, 0.0, 0.0) * kick_k
+	rot += Vector3(18.0, -10.0, 32.0) * reload_k
 	rot += Vector3(-rad_to_deg(_sway_rot.y) * 0.6, -rad_to_deg(_sway_rot.x) * 0.8, rad_to_deg(_sway_rot.x) * 0.5)
 	rot += Vector3(-45.0, 15.0, 0.0) * wall_k
 	rotation_degrees = rot
 
 
+## Fire impulse; 1.0 is a 230gr ball round.
+func kick(strength: float) -> void:
+	_kick_vel += 7.0 * strength
+
+
 ## True when the gun is clear to shoot (not sprinting, not jammed against a wall).
 func can_fire() -> bool:
-	return _sprint < 0.3 and _wall < 0.5
+	return _sprint < 0.3 and _wall < 0.5 and not (player.firearm and player.firearm.reloading)

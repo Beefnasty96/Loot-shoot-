@@ -1,0 +1,121 @@
+"""Synthesizes the game's placeholder sound effects (16-bit mono WAV, 22.05 kHz).
+
+Usage: python3 synth_sfx.py <out_dir>
+Gunshot = sharp supersonic-style crack + low boom + room tail; mechanical sounds
+are short filtered noise bursts with metallic resonances.
+"""
+import os
+import sys
+import wave
+
+import numpy as np
+
+SR = 22050
+rng = np.random.default_rng(1911)
+out = sys.argv[1] if len(sys.argv) > 1 else "."
+os.makedirs(out, exist_ok=True)
+
+
+def t(sec):
+    return np.arange(int(SR * sec)) / SR
+
+
+def env(n, attack, decay):
+    x = np.arange(n) / SR
+    a = np.clip(x / max(attack, 1e-4), 0, 1)
+    return a * np.exp(-x / decay)
+
+
+def lowpass(x, cutoff):
+    # one-pole low-pass, applied twice
+    a = np.exp(-2 * np.pi * cutoff / SR)
+    for _ in range(2):
+        y = np.zeros_like(x)
+        acc = 0.0
+        for i, v in enumerate(x):
+            acc = (1 - a) * v + a * acc
+            y[i] = acc
+        x = y
+    return x
+
+
+def highpass(x, cutoff):
+    return x - lowpass(x, cutoff)
+
+
+def ring(freq, sec, decay, amp=1.0):
+    tt = t(sec)
+    return amp * np.sin(2 * np.pi * freq * tt) * np.exp(-tt / decay)
+
+
+def pad(x, sec):
+    n = int(SR * sec)
+    return np.pad(x, (0, max(0, n - len(x))))[:n]
+
+
+def save(name, x, gain=0.9):
+    x = x / (np.max(np.abs(x)) + 1e-9) * gain
+    data = (x * 32767).astype(np.int16)
+    with wave.open(os.path.join(out, name), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(data.tobytes())
+    print("wrote", name)
+
+
+def mix(*xs):
+    """Sum clips of different lengths (zero-padded to the longest)."""
+    n = max(len(x) for x in xs)
+    return sum(np.pad(x, (0, n - len(x))) for x in xs)
+
+
+def burst(sec, hp, attack, decay):
+    """High-passed noise burst with an envelope."""
+    return highpass(noise(sec), hp) * env(int(SR * sec), attack, decay)
+
+
+def noise(sec):
+    return rng.uniform(-1, 1, int(SR * sec))
+
+
+# --- .45 ACP gunshot: big subsonic boom, less crack than a rifle.
+n = noise(0.9)
+crack = highpass(n, 2500) * env(len(n), 0.0003, 0.004) * 0.8
+boom = lowpass(n, 260) * env(len(n), 0.001, 0.09) * 6.0
+body = lowpass(n, 1200) * env(len(n), 0.0005, 0.03) * 1.6
+tail = lowpass(noise(0.9), 700) * env(len(n), 0.02, 0.28) * 0.9
+thump = ring(70, 0.9, 0.06, 1.2)
+save("shot_45.wav", crack + boom + body + tail + thump, 0.95)
+
+# --- Dry fire: hammer falls on an empty chamber.
+x = pad(mix(burst(0.03, 1500, 0.0002, 0.004), ring(3100, 0.08, 0.012, 0.5)), 0.12)
+save("dry_fire.wav", x, 0.6)
+
+# --- Magazine out / in, slide release.
+mo = pad(mix(burst(0.05, 800, 0.0005, 0.01), ring(1800, 0.1, 0.02, 0.4)), 0.2)
+save("mag_out.wav", mo, 0.6)
+mi1 = mix(burst(0.04, 900, 0.0003, 0.006), ring(2200, 0.04, 0.01, 0.4))
+mi = pad(np.concatenate([mi1, np.zeros(int(SR * 0.05)), mix(mi1 * 1.3, ring(1400, 0.04, 0.015, 0.6))]), 0.25)
+save("mag_in.wav", mi, 0.7)
+sr_ = pad(mix(burst(0.06, 600, 0.0002, 0.012), ring(950, 0.15, 0.03, 0.8), ring(2600, 0.1, 0.015, 0.4)), 0.25)
+save("slide_release.wav", sr_, 0.8)
+
+# --- Casing tinkle on the floor.
+c = ring(4200, 0.25, 0.05, 0.6) + ring(6100, 0.25, 0.03, 0.4)
+c = c + np.concatenate([np.zeros(int(SR * 0.09)), ring(4700, 0.16, 0.03, 0.4)])[:len(c)]
+save("casing.wav", pad(c, 0.3), 0.35)
+
+# --- Impacts.
+save("impact_hard.wav", pad(lowpass(noise(0.15), 2500) * env(int(SR * 0.15), 0.0003, 0.025), 0.2), 0.6)
+save("impact_metal.wav", pad(mix(burst(0.05, 2000, 0.0002, 0.006), ring(2900, 0.4, 0.08, 0.7), ring(4300, 0.3, 0.05, 0.3)), 0.45), 0.7)
+save("impact_wood.wav", pad(mix(lowpass(noise(0.12), 1500) * env(int(SR * 0.12), 0.0003, 0.02), ring(420, 0.12, 0.03, 0.5)), 0.15), 0.6)
+save("impact_glass.wav", pad(mix(burst(0.5, 3000, 0.0002, 0.12), ring(5200, 0.4, 0.06, 0.3)), 0.55), 0.6)
+save("impact_flesh.wav", pad(mix(lowpass(noise(0.12), 600) * env(int(SR * 0.12), 0.001, 0.025), ring(110, 0.12, 0.04, 0.6)), 0.15), 0.6)
+
+# --- Ricochet whine: falling pitch sweep.
+tt = t(0.6)
+f = 2400 * np.exp(-tt * 2.2) + 600
+phase = 2 * np.pi * np.cumsum(f) / SR
+rico = np.sin(phase) * np.exp(-tt / 0.22) * 0.6 + highpass(noise(0.6), 3000) * env(len(tt), 0.0002, 0.01)
+save("ricochet.wav", rico, 0.55)

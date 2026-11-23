@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.7", "Mobile")
 [autoload]
 
 InputSetup="*res://scripts/input_setup.gd"
+Ballistics="*res://scripts/ballistics/ballistics.gd"
 
 [display]
 

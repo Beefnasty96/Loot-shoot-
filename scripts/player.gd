@@ -50,7 +50,9 @@ var fp_camera: Camera3D
 var _spring: SpringArm3D
 var tp_camera: Camera3D
 var viewmodel: Viewmodel
+var firearm: Firearm
 var _tp_weapon: Node3D
+var _recoil_recover := 0.0  ## Degrees of muzzle climb still to settle.
 
 
 func _ready() -> void:
@@ -61,6 +63,8 @@ func _ready() -> void:
 # ---------------------------------------------------------------- construction
 
 func _build() -> void:
+	collision_layer = 2  # characters; the world stays on layer 1
+	collision_mask = 1
 	_shape = CapsuleShape3D.new()
 	_shape.radius = RADIUS
 	_shape.height = STAND_HEIGHT
@@ -133,6 +137,12 @@ func _build() -> void:
 	head.add_child(_tp_weapon)
 	_set_layers(_tp_weapon, PLAYER_MODEL_LAYER)
 
+	firearm = Firearm.new()
+	firearm.player = self
+	add_child(firearm)
+	firearm.register_weapon(viewmodel.weapon, Viewmodel.LAYER)
+	firearm.register_weapon(_tp_weapon, PLAYER_MODEL_LAYER)
+
 
 # ---------------------------------------------------------------- input
 
@@ -164,6 +174,12 @@ func _move_input() -> Vector2:
 	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 
 
+## Muzzle climb from a shot; about half settles back on its own.
+func add_recoil(pitch_deg: float, yaw_deg: float) -> void:
+	_turn(yaw_deg, pitch_deg)
+	_recoil_recover += pitch_deg * 0.5
+
+
 func _turn(yaw_deg: float, pitch_deg: float) -> void:
 	rotate_y(deg_to_rad(yaw_deg))
 	pitch = clampf(pitch + pitch_deg, -85.0, 85.0)
@@ -178,6 +194,11 @@ func _process(delta: float) -> void:
 		look = look.normalized() * pow(look.length(), 2.0)
 		var speed := look_speed_deg * (aim_look_scale if aiming else 1.0)
 		_turn(-look.x * speed * delta, -look.y * speed * delta)
+
+	if _recoil_recover > 0.0:
+		var settle := minf(_recoil_recover, delta * 14.0)
+		pitch -= settle
+		_recoil_recover -= settle
 
 	var was_aiming := aiming
 	aiming = Input.is_action_pressed("aim")
@@ -257,7 +278,7 @@ func _blocked_above() -> bool:
 	var space := get_world_3d().direct_space_state
 	var from := global_position + Vector3.UP * CROUCH_HEIGHT
 	var to := global_position + Vector3.UP * (STAND_HEIGHT + 0.05)
-	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var query := PhysicsRayQueryParameters3D.create(from, to, 1)
 	query.exclude = [get_rid()]
 	return not space.intersect_ray(query).is_empty()
 

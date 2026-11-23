@@ -1,72 +1,101 @@
 extends CanvasLayer
-## Main-screen HUD: crosshair, view/stance readout, FPS, and a pause/controls panel.
+## Main-screen HUD: crosshair, view/stance readout, ammo, mag check,
+## ballistics readout (D-pad down toggles it with the bullet-path lines) and pause panel.
 
 var player: Player
 
 var _status: Label
 var _crosshair: Label
+var _ammo_big: Label
+var _ammo_info: Label
+var _mag_check: Label
+var _hits: Label
 var _pause_panel: PanelContainer
+var _hit_lines: Array[String] = []
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
-	_crosshair = Label.new()
-	_crosshair.text = "+"
-	_crosshair.add_theme_font_size_override("font_size", 40)
-	_crosshair.add_theme_color_override("font_outline_color", Color.BLACK)
-	_crosshair.add_theme_constant_override("outline_size", 6)
+	_crosshair = _label("+", 40)
 	_crosshair.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_crosshair.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_crosshair.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	add_child(_crosshair)
 
-	_status = Label.new()
+	_status = _label("", 26)
 	_status.position = Vector2(24, 18)
-	_status.add_theme_font_size_override("font_size", 28)
-	_status.add_theme_color_override("font_outline_color", Color.BLACK)
-	_status.add_theme_constant_override("outline_size", 6)
-	add_child(_status)
 
-	var hint := Label.new()
-	hint.text = "START: controls"
-	hint.add_theme_font_size_override("font_size", 22)
-	hint.add_theme_color_override("font_outline_color", Color.BLACK)
-	hint.add_theme_constant_override("outline_size", 5)
+	var hint := _label("START: controls", 22)
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hint.position += Vector2(24, -48)
-	add_child(hint)
+
+	_ammo_big = _label("", 64)
+	_ammo_big.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_ammo_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_ammo_big.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_ammo_big.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_ammo_big.position += Vector2(-32, -150)
+
+	_ammo_info = _label("", 22)
+	_ammo_info.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_ammo_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_ammo_info.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_ammo_info.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_ammo_info.position += Vector2(-32, -40)
+
+	_mag_check = _label("", 30)
+	_mag_check.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_mag_check.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mag_check.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_mag_check.position += Vector2(0, -230)
+
+	_hits = _label("", 20)
+	_hits.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_hits.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_hits.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_hits.position += Vector2(-24, 18)
 
 	_build_pause_panel()
+	Ballistics.impact.connect(_on_impact)
+
+
+func _label(text: String, size: int) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_outline_color", Color.BLACK)
+	l.add_theme_constant_override("outline_size", maxi(4, size / 5))
+	add_child(l)
+	return l
 
 
 func _build_pause_panel() -> void:
 	_pause_panel = PanelContainer.new()
-	_pause_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_pause_panel.visible = false
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.8)
-	style.set_content_margin_all(32)
+	style.bg_color = Color(0, 0, 0, 0.82)
+	style.set_content_margin_all(28)
 	_pause_panel.add_theme_stylebox_override("panel", style)
 	var text := Label.new()
-	text.add_theme_font_size_override("font_size", 28)
+	text.add_theme_font_size_override("font_size", 24)
 	text.text = "\n".join([
-		"PAUSED  -  Loot Shoot test gym v0.1",
+		"PAUSED  -  Loot Shoot test gym v0.3",
 		"",
-		"Left stick ........ move",
-		"Right stick ....... look",
-		"L3 ................ sprint (3rd person, standing: swap shoulder)",
+		"Left stick ........ move            Right stick ....... look",
+		"R2 ................ fire            L2 ................ aim down sights",
+		"X ................. reload (hold: check magazine)",
+		"D-pad left/right .. load for your NEXT magazine",
+		"D-pad down ........ bullet paths + ballistics readout",
 		"R3 ................ first / third person",
-		"L2 ................ aim (zoom, first person)",
-		"L1 / R1 ........... lean left / right",
-		"B ................. crouch",
+		"L3 ................ sprint (3rd person, standing: swap shoulder)",
+		"L1 / R1 ........... lean         B ......... crouch",
 		"",
-		"Firing arrives in the next step.",
+		"Sights are zeroed at 25 yd for 230gr ball.",
+		"Bullet paths: white = flying, orange = after penetrating, yellow = ricochet.",
 		"START to resume",
 	])
 	_pause_panel.add_child(text)
 	add_child(_pause_panel)
-	# Re-centre after the label sizes the panel.
 	_pause_panel.resized.connect(func():
 		_pause_panel.position = (get_viewport().get_visible_rect().size - _pause_panel.size) / 2.0)
 
@@ -79,6 +108,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		if paused and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("toggle_debug"):
+		Ballistics.debug_enabled = not Ballistics.debug_enabled
+
+
+func _on_impact(info: Dictionary) -> void:
+	var a: AmmoType = info.ammo
+	var what: String = info.zone.to_upper() if info.zone != "" else String(info.material).replace("_", " ")
+	var line := "%s %s: %d fps, %d ft-lb in" % [a.short_name, what, roundi(AmmoType.ms_to_fps(info.speed_in)), roundi(AmmoType.j_to_ftlb(info.energy_in))]
+	match info.result:
+		"penetrated":
+			line += " -> through %d mm, %d fps out" % [roundi(info.thickness_mm), roundi(AmmoType.ms_to_fps(info.speed_out))]
+		"stopped":
+			line += " -> stopped at %d mm" % roundi(info.depth_mm)
+		"ricochet":
+			line += " -> RICOCHET"
+		"disintegrated":
+			line += " -> turned to dust"
+	if info.expanded:
+		line += " [expanded]"
+	elif info.clogged:
+		line += " [plugged]"
+	elif info.deformed:
+		line += " [deformed]"
+	if info.zone != "":
+		line += " -%d HP" % roundi(info.damage)
+	line += "  (%d m)" % roundi(info.distance)
+	_hit_lines.push_front(line)
+	if _hit_lines.size() > 6:
+		_hit_lines.resize(6)
 
 
 func _process(_delta: float) -> void:
@@ -87,9 +145,25 @@ func _process(_delta: float) -> void:
 	var stance := "Crouched" if player.crouching else ("Sprinting" if player.sprinting else "Standing")
 	if player.aiming:
 		stance += " - Aiming"
-	var shoulder := "R" if player.shoulder > 0.0 else "L"
 	var view := player.view_name()
 	if player.effective_view() == Player.View.THIRD:
-		view += " (%s shoulder)" % shoulder
+		view += " (%s shoulder)" % ("R" if player.shoulder > 0.0 else "L")
 	_status.text = "%s\n%s\nFPS %d" % [view, stance, Engine.get_frames_per_second()]
 	_crosshair.visible = not get_tree().paused and not player.aiming
+
+	var f := player.firearm
+	if f:
+		var mag := str(f.mag_count) if f.has_mag else "-"
+		var chamber := " + 1" if f.chambered else " + 0"
+		_ammo_big.text = mag + chamber
+		var lines := []
+		lines.append("Chamber: %s" % f.current_ammo_name())
+		lines.append("Mag: %s" % (f.mag_ammo.display_name if f.has_mag else "none"))
+		lines.append("Next mag:  <  %s  >" % f.next_ammo().display_name)
+		if f.reloading:
+			lines.push_front("RELOADING")
+		elif f.slide_locked:
+			lines.push_front("SLIDE LOCKED - reload")
+		_ammo_info.text = "\n".join(lines)
+		_mag_check.text = f.mag_check_text if f.mag_check_time > 0.0 else ""
+	_hits.text = "\n".join(_hit_lines) if Ballistics.debug_enabled else ""
