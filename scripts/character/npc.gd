@@ -4,6 +4,13 @@ extends Node3D
 ## DamageModel and gear with things in the pockets. When killed it falls and
 ## the body can be searched (A): its worn gear and everything stored in it.
 ## AI comes later; for now they stand still.
+##
+## Getting shot: each hit hands the body the momentum the bullet lost plus a
+## share of the energy it dumped. Alive, the struck part flinches and the
+## person staggers, scaled by how heavy they are (body + gear). Dead, they go
+## limp as a ragdoll and the push goes into the part that was hit, so a
+## hollow point that stops in the chest shoves harder than ball ammo that
+## passes through.
 
 const HITBOXES := [
 	# zone, bone, centre (rest pose, rig space: +Z forward, +X = their left), size, gel factor
@@ -30,6 +37,11 @@ var damage := DamageModel.new()
 var dead := false
 var title := "Body"
 var _hitboxes: Array[Hitbox] = []
+var _stagger := Vector3.ZERO      ## Sideways shove velocity while alive (m/s).
+
+## How much the deposited energy adds to the push, kg·m/s per joule. Real bullet momentum
+## alone barely moves a body; the extra stands in for the involuntary flinch/collapse.
+const ENERGY_PUSH := 0.02
 
 
 func _ready() -> void:
@@ -78,6 +90,7 @@ func _build_hitboxes() -> void:
 		hb.zone = h[0]
 		hb.gel_factor = h[4]
 		hb.receiver = self
+		hb.bone_name = h[1]
 		var cs := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
 		shape.size = h[3]
@@ -89,24 +102,51 @@ func _build_hitboxes() -> void:
 		_hitboxes.append(hb)
 
 
+func _process(delta: float) -> void:
+	if dead or _stagger.length_squared() < 1e-6:
+		return
+	model.position += _stagger * delta
+	_stagger = _stagger.move_toward(Vector3.ZERO, 5.0 * delta)
+
+
+func _physics_process(delta: float) -> void:
+	if not dead and _stagger == Vector3.ZERO and model.position != Vector3.ZERO:
+		model.position = model.position.move_toward(Vector3.ZERO, 0.2 * delta)   # step back into place
+
+
+## Push (kg·m/s) a hit gives this body.
+static func hit_impulse(info: Dictionary) -> float:
+	return float(info.get("momentum", 0.0)) + float(info.get("deposited", 0.0)) * ENERGY_PUSH
+
+
 func take_hit(info: Dictionary) -> void:
+	var dir: Vector3 = info.get("direction", -global_transform.basis.z)
+	var push := hit_impulse(info)
 	if dead:
+		model.apply_ragdoll_impulse(dir * push, info.position, info.bone)
 		return
 	damage.apply(info.zone, info.damage)
 	if damage.dead:
-		die()
+		die(dir * push, info.position, info.bone)
+		return
+	# Flinch: the struck part reacts by its own mass (an arm jerks more than a chest).
+	# Stagger: the whole body, so lighter people (and lighter loads) get moved more.
+	model.react(info.zone, dir, clampf(push / model.segment_mass_kg(info.bone) * 1.5, 0.05, 1.5))
+	var mass := model.total_mass_kg()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	_stagger += global_transform.basis.inverse() * flat * (push / mass) * 8.0
 
 
-func die() -> void:
+func die(impulse := Vector3.ZERO, at := Vector3.ZERO, bone := "") -> void:
 	dead = true
-	for hb in _hitboxes:
-		hb.collision_layer = 0
-	# Fall onto the back. (Ragdolls come later.)
-	var tw := create_tween()
-	tw.tween_property(model, "rotation:x", PI / 2.0, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.parallel().tween_property(model, "position:y", 0.13, 0.45)
 	model.move_speed = 0.0
+	model.start_ragdoll(impulse, at, bone)   # hitboxes stay on, so the body still takes shots
 	add_to_group("interactable")
+
+
+## Where the body actually is (the ragdoll can slide away from where they stood).
+func interact_point() -> Vector3:
+	return model.centre_world()
 
 
 func prompt() -> String:

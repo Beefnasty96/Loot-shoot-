@@ -13,6 +13,11 @@ extends Node3D
 ## Pose: procedural until we have animations. Two-bone IK for arms and legs
 ## (hands to a pistol grip or hanging, feet planted with a simple walk cycle),
 ## crouch, aim pitch through the spine and head, finger curl.
+##
+## Physics: every human has a mass (from height) plus the weight of what they
+## wear and carry, spread over 14 ragdoll bodies by real body-segment
+## proportions. Hits make the struck part flinch (alive) or push the ragdoll
+## (dead); start_ragdoll() hands the body over to physics.
 
 const BODY_SCENE := preload("res://assets/characters/base/body.glb")
 const BODY_SHADER := preload("res://shaders/body.gdshader")
@@ -50,6 +55,38 @@ var _parent: PackedInt32Array = []
 var _child_dir: Array[Vector3] = []
 var _phase := 0.0
 
+# ---- ragdoll / mass
+## Body-segment share of mass (Dempster / Winter tables), collision radius, cone swing, twist.
+## Bones not listed (Chest, Neck, hands, fingers, toes) ride on their parent.
+const RAGDOLL := [
+	["Hips", 0.142, 0.11, 0.0, 0.0],
+	["Spine", 0.139, 0.12, 20.0, 15.0],
+	["UpperChest", 0.216, 0.14, 20.0, 15.0],
+	["Head", 0.081, 0.10, 40.0, 30.0],
+	["LeftUpperArm", 0.028, 0.045, 80.0, 40.0],
+	["LeftLowerArm", 0.022, 0.04, 75.0, 5.0],
+	["RightUpperArm", 0.028, 0.045, 80.0, 40.0],
+	["RightLowerArm", 0.022, 0.04, 75.0, 5.0],
+	["LeftUpperLeg", 0.100, 0.07, 60.0, 15.0],
+	["LeftLowerLeg", 0.0465, 0.055, 75.0, 5.0],
+	["LeftFoot", 0.0145, 0.045, 25.0, 5.0],
+	["RightUpperLeg", 0.100, 0.07, 60.0, 15.0],
+	["RightLowerLeg", 0.0465, 0.055, 75.0, 5.0],
+	["RightFoot", 0.0145, 0.045, 25.0, 5.0],
+]
+## Which ragdoll bodies carry the weight of gear in each slot.
+const GEAR_LOAD := {
+	head = ["Head"], face = ["Head"], torso_inner = ["Spine", "UpperChest"], torso_outer = ["Spine", "UpperChest"],
+	vest = ["UpperChest"], back = ["UpperChest"], belt = ["Hips"], hands = ["LeftLowerArm", "RightLowerArm"],
+	legs = ["Hips", "LeftUpperLeg", "RightUpperLeg"], feet = ["LeftFoot", "RightFoot"], accessory = ["LeftLowerArm"],
+}
+const RAGDOLL_LAYER := 16   ## Physics layer 5: ragdolls collide with the world and each other, bullets use hitboxes.
+var ragdoll_active := false
+var _sim: PhysicalBoneSimulator3D
+var _pbones: Dictionary = {}      ## bone name -> PhysicalBone3D
+## Hit reaction springs: region -> [axis (rig space), angle, angular velocity]
+var _react: Dictionary = {}
+
 
 func _ready() -> void:
 	_root = Node3D.new()
@@ -69,6 +106,7 @@ func _ready() -> void:
 		mi.material_override = _body_mat
 	equipment.changed.connect(_on_equipment_changed)
 	_cache_skeleton()
+	_build_ragdoll()
 	apply_appearance()
 	_apply_layers(self)
 
@@ -78,6 +116,7 @@ func _ready() -> void:
 func apply_appearance() -> void:
 	if _body_mat == null:
 		return
+	update_ragdoll_masses()
 	_body_mat.set_shader_parameter("skin_tone", appearance.skin_tone)
 	_body_mat.set_shader_parameter("hair_color", appearance.hair_color)
 	_body_mat.set_shader_parameter("eye_color", appearance.eye_color)
@@ -114,6 +153,7 @@ func random_outfit(rng: RandomNumberGenerator) -> void:
 
 
 func _on_equipment_changed(slot: String) -> void:
+	update_ragdoll_masses()
 	for n: Node in _visuals.get(slot, []):
 		if is_instance_valid(n):
 			n.queue_free()
@@ -227,8 +267,12 @@ func _two_bone(a: Vector3, target: Vector3, l1: float, l2: float, pole: Vector3)
 
 
 func _process(delta: float) -> void:
-	if skeleton == null:
+	if skeleton == null or ragdoll_active:
 		return
+	for k: String in _react:
+		var r: Array = _react[k]
+		r[2] += (-r[1] * 180.0 - r[2] * 16.0) * delta    # stiff, well-damped spring: a sharp flinch
+		r[1] += r[2] * delta
 	var speed_k := clampf(move_speed / 3.2, 0.0, 1.8)
 	_phase = fmod(_phase + delta * (2.0 + move_speed * 2.2) * (1.0 if move_speed > 0.2 else 0.0), TAU)
 	_pose(speed_k)
@@ -252,14 +296,18 @@ func _pose(speed_k: float) -> void:
 		var side := 1.0 if name.begins_with("Left") else -1.0
 
 		if name == "Hips":
-			want.origin.y -= drop + absf(sin(_phase)) * 0.02 * speed_k
+			var buckle := (_react_angle("leg_l") + _react_angle("leg_r")) * 0.25
+			want.origin.y -= drop + absf(sin(_phase)) * 0.02 * speed_k + absf(buckle)
 		elif name == "Spine":
 			want = _rot(neutral, Vector3.RIGHT, crouch * 0.25)
+			want = _apply_react(want, "torso", 0.4)
 		elif name == "UpperChest":
 			var pitch := aim_pitch * (0.45 if pose_mode == PoseMode.PISTOL else 0.15)
 			want = _rot(neutral, Vector3.LEFT, pitch)
+			want = _apply_react(want, "torso", 0.6)
 		elif name == "Head":
 			want = _rot(neutral, Vector3.LEFT, aim_pitch * 0.4)
+			want = _apply_react(want, "head", 1.0)
 		elif name.ends_with("UpperLeg"):
 			var hip := neutral.origin
 			var knee_i := _b(name.replace("Upper", "Lower"))
@@ -297,6 +345,7 @@ func _pose(speed_k: float) -> void:
 				hand_dir = Vector3(side * 0.1, -1.0, 0.15)
 			var elbow := _two_bone(sh, target, l1, l2, pole)
 			want = _aim(neutral, i, elbow - sh)
+			want = _apply_react(want, "arm_l" if side > 0 else "arm_r", 1.0)
 			pending[low_i] = target - elbow
 			pending[hand_i] = hand_dir
 		elif pending.has(i):
@@ -317,3 +366,152 @@ func _pose(speed_k: float) -> void:
 		var local := pg.affine_inverse() * want
 		skeleton.set_bone_pose_position(i, local.origin)
 		skeleton.set_bone_pose_rotation(i, local.basis.get_rotation_quaternion())
+
+
+# ------------------------------------------------------------------ mass, reactions, ragdoll
+
+## Body mass from height (78 kg at 1.0 scale, cube law), without gear.
+func body_mass_kg() -> float:
+	return 78.0 * pow(appearance.height, 3.0)
+
+
+## Body plus everything worn and carried.
+func total_mass_kg() -> float:
+	return body_mass_kg() + equipment.total_weight()
+
+
+## Mass of the ragdoll body a bone belongs to (kg).
+func segment_mass_kg(bone: String) -> float:
+	var pb: PhysicalBone3D = _pbones.get(_ragdoll_body_for(bone))
+	return pb.mass if pb else 20.0
+
+
+## Flinch: the hit part rotates away from the shot. `strength` ~0.2 (graze) to ~1.5 (big dump of energy).
+func react(zone: String, dir_world: Vector3, strength: float) -> void:
+	var region := zone
+	if zone == "thorax" or zone == "stomach":
+		region = "torso"
+	var dir_rig := (skeleton.global_transform.basis.inverse() * dir_world).normalized()
+	var axis := Vector3.UP.cross(dir_rig)       # tilt the top of the part along the shot
+	if region.begins_with("arm"):
+		axis = Vector3.FORWARD.cross(dir_rig) if axis.length() < 0.1 else axis
+	if axis.length() < 0.01:
+		axis = Vector3.RIGHT
+	var r: Array = _react.get(region, [axis.normalized(), 0.0, 0.0])
+	r[0] = axis.normalized()
+	r[2] += strength * (9.0 if region == "head" else 6.0)
+	_react[region] = r
+
+
+func _react_angle(region: String) -> float:
+	return _react[region][1] if _react.has(region) else 0.0
+
+
+func _apply_react(t: Transform3D, region: String, share: float) -> Transform3D:
+	if not _react.has(region):
+		return t
+	var r: Array = _react[region]
+	if absf(r[1]) < 0.0005:
+		return t
+	return _rot(t, r[0], r[1] * share)
+
+
+func _build_ragdoll() -> void:
+	_sim = PhysicalBoneSimulator3D.new()
+	skeleton.add_child(_sim)
+	var parent_of := {}
+	for row: Array in RAGDOLL:
+		parent_of[row[0]] = true
+	for row: Array in RAGDOLL:
+		var bname: String = row[0]
+		var bi := skeleton.find_bone(bname)
+		if bi < 0:
+			continue
+		var d := _child_dir[bi]                    # bone direction in its own space
+		var length := maxf(d.length(), 0.08)
+		var pb := PhysicalBone3D.new()
+		pb.bone_name = bname
+		pb.name = "Ragdoll_" + bname
+		# Body centred halfway down the bone, its -Z along the bone (Godot's convention).
+		var up := Vector3.UP if absf(d.normalized().dot(Vector3.UP)) < 0.95 else Vector3.RIGHT
+		var body := Transform3D(Basis.looking_at(d.normalized(), up), d * 0.5)
+		pb.body_offset = body
+		pb.joint_offset = Transform3D(Basis(), Vector3(0, 0, length * 0.5))
+		if bname == "Hips":
+			pb.joint_type = PhysicalBone3D.JOINT_TYPE_NONE
+		else:
+			pb.joint_type = PhysicalBone3D.JOINT_TYPE_CONE
+			pb.set("joint_constraints/swing_span", row[3])
+			pb.set("joint_constraints/twist_span", row[4])
+			pb.set("joint_constraints/softness", 0.9)
+			pb.set("joint_constraints/relaxation", 1.0)
+		pb.linear_damp = 0.15
+		pb.angular_damp = 2.5
+		pb.friction = 0.8
+		pb.collision_layer = RAGDOLL_LAYER
+		pb.collision_mask = 1 | RAGDOLL_LAYER
+		var cs := CollisionShape3D.new()
+		var cap := CapsuleShape3D.new()
+		cap.radius = row[2]
+		cap.height = maxf(length + row[2] * 0.5, row[2] * 2.0 + 0.01)
+		cs.shape = cap
+		cs.rotation.x = PI / 2.0                   # capsule Y -> body Z (along the bone)
+		pb.add_child(cs)
+		_sim.add_child(pb)
+		_pbones[bname] = pb
+	update_ragdoll_masses()
+
+
+## Spread body mass by segment share, then add each worn item's weight (and contents) to the parts that carry it.
+func update_ragdoll_masses() -> void:
+	var m := body_mass_kg()
+	for row: Array in RAGDOLL:
+		if _pbones.has(row[0]):
+			(_pbones[row[0]] as PhysicalBone3D).mass = m * row[1]
+	for slot: String in equipment.worn:
+		var g: GearInstance = equipment.worn[slot]
+		var kg := g.item.weight_kg
+		for grid: InvGrid in g.grids:
+			kg += grid.content_weight()
+		var parts: Array = GEAR_LOAD.get(slot, ["UpperChest"])
+		for part: String in parts:
+			if _pbones.has(part):
+				(_pbones[part] as PhysicalBone3D).mass += kg / parts.size()
+
+
+## Hand the body to physics (death). Optionally push the part that was hit.
+func start_ragdoll(impulse := Vector3.ZERO, at_world := Vector3.ZERO, bone := "") -> void:
+	if ragdoll_active:
+		return
+	update_ragdoll_masses()
+	ragdoll_active = true
+	_sim.physical_bones_start_simulation()
+	if impulse != Vector3.ZERO:
+		# Let the bodies spawn at the current pose first, then push.
+		await get_tree().physics_frame
+		apply_ragdoll_impulse(impulse, at_world, bone)
+
+
+func apply_ragdoll_impulse(impulse: Vector3, at_world: Vector3, bone: String) -> void:
+	var pb: PhysicalBone3D = _pbones.get(_ragdoll_body_for(bone))
+	if pb == null:
+		pb = _pbones.get("UpperChest")
+	if pb:
+		pb.apply_impulse(impulse, at_world - pb.global_position)
+
+
+## Nearest simulated body for any bone (e.g. Neck -> Head's parent chain).
+func _ragdoll_body_for(bone: String) -> String:
+	var bi := skeleton.find_bone(bone)
+	while bi >= 0:
+		var n := skeleton.get_bone_name(bi)
+		if _pbones.has(n):
+			return n
+		bi = skeleton.get_bone_parent(bi)
+	return "UpperChest"
+
+
+## Centre of the body (follows the ragdoll once it's simulating).
+func centre_world() -> Vector3:
+	var pb: PhysicalBone3D = _pbones.get("Spine")
+	return pb.global_position if pb and ragdoll_active else global_position + Vector3.UP * 1.0
