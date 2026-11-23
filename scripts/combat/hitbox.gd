@@ -8,6 +8,7 @@ const LAYER := 4  ## Physics layer 3.
 @export var zone := "thorax"
 @export var gel_factor := 1.0  ## Tissue/bone density relative to gel (skull and ribs > 1).
 var receiver: Node
+var bone_name := ""  ## Skeleton bone this box rides on (for hit reactions).
 
 
 func _init() -> void:

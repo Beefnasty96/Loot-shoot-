@@ -186,7 +186,8 @@ func interact_target() -> Node3D:
 	var fwd := -global_transform.basis.z
 	for n in get_tree().get_nodes_in_group("interactable"):
 		var node := n as Node3D
-		var d := node.global_position - global_position
+		var at: Vector3 = node.interact_point() if node.has_method("interact_point") else node.global_position
+		var d := at - global_position
 		d.y = 0.0
 		var dist := d.length()
 		if dist < best_d and (dist < 0.8 or d.normalized().dot(fwd) > 0.3):

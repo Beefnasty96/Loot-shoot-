@@ -166,6 +166,8 @@ func _on_impact(info: Dictionary) -> void:
 		line += " [deformed]"
 	if info.zone != "":
 		line += " -%d HP" % roundi(info.damage)
+		if info.has("bleed"):
+			line += ", " + info.bleed
 	line += "  (%s)" % Units.feet(info.distance)
 	_hit_lines.push_front(line)
 	if _hit_lines.size() > 6:
