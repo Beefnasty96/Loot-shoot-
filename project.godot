@@ -1,0 +1,35 @@
+; Engine configuration file.
+; Loot Shoot — tactical roguelike shooter for the AYN Thor.
+
+config_version=5
+
+[application]
+
+config/name="Loot Shoot"
+config/version="0.1.0"
+run/main_scene="res://scenes/gym.tscn"
+config/features=PackedStringArray("4.7", "Mobile")
+
+[autoload]
+
+InputSetup="*res://scripts/input_setup.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+
+[physics]
+
+common/physics_ticks_per_second=60
+
+[rendering]
+
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+textures/canvas_textures/default_texture_filter=0
+textures/vram_compression/import_etc2_astc=true
+anti_aliasing/quality/msaa_3d=1

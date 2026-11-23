@@ -1,0 +1,263 @@
+class_name Player
+extends CharacterBody3D
+## Player controller: movement, crouch, sprint, lean, aim, and first/third person.
+## One character, two cameras. R3 swaps views; aiming (L2) always uses first person.
+
+signal view_changed(view_name: String)
+
+enum View { FIRST, THIRD }
+
+@export var walk_speed := 3.2
+@export var sprint_speed := 5.8
+@export var crouch_speed := 1.6
+@export var acceleration := 14.0
+@export var look_speed_deg := 170.0   ## Degrees per second at full right-stick deflection.
+@export var aim_look_scale := 0.45    ## Look speed multiplier while aiming.
+@export var mouse_sensitivity := 0.12 ## Degrees per pixel (PC testing).
+@export var fov_normal := 75.0
+@export var fov_aim := 50.0
+
+const STAND_HEIGHT := 1.8
+const CROUCH_HEIGHT := 1.1
+const EYE_STAND := 1.62
+const EYE_CROUCH := 0.95
+const RADIUS := 0.32
+const LEAN_OFFSET := 0.35     ## Metres the head shifts sideways at full lean.
+const LEAN_ROLL_DEG := 14.0
+const SHOULDER_OFFSET := 0.5
+const SPRING_LENGTH := 2.3
+const PLAYER_MODEL_LAYER := 2 ## Render layer 2 (bit value 2): hidden from the first-person camera.
+
+var view: View = View.FIRST
+var shoulder := 1.0          ## +1 = right shoulder, -1 = left.
+var sprinting := false
+var crouching := false
+var aiming := false
+var lean := 0.0
+var pitch := 0.0
+
+var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _height := STAND_HEIGHT
+var _bob_time := 0.0
+
+var _shape: CapsuleShape3D
+var _collision: CollisionShape3D
+var _model: Node3D
+var _body_mesh: MeshInstance3D
+var _head_mesh: MeshInstance3D
+var head: Node3D             ## Pitch + lean pivot at eye height.
+var fp_camera: Camera3D
+var _spring: SpringArm3D
+var tp_camera: Camera3D
+
+
+func _ready() -> void:
+	_build()
+	_apply_view()
+
+
+# ---------------------------------------------------------------- construction
+
+func _build() -> void:
+	_shape = CapsuleShape3D.new()
+	_shape.radius = RADIUS
+	_shape.height = STAND_HEIGHT
+	_collision = CollisionShape3D.new()
+	_collision.shape = _shape
+	_collision.position.y = STAND_HEIGHT / 2.0
+	add_child(_collision)
+
+	# Low-poly stand-in model, only seen in third person.
+	_model = Node3D.new()
+	add_child(_model)
+	var suit := StandardMaterial3D.new()
+	suit.albedo_color = Color(0.32, 0.36, 0.24)
+	var body := CapsuleMesh.new()
+	body.radius = RADIUS
+	body.height = 1.45
+	body.radial_segments = 8
+	body.rings = 2
+	body.material = suit
+	_body_mesh = MeshInstance3D.new()
+	_body_mesh.mesh = body
+	_body_mesh.position.y = 0.725
+	_body_mesh.layers = PLAYER_MODEL_LAYER
+	_model.add_child(_body_mesh)
+
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.2, 0.2, 0.22)  # balaclava / helmet
+	var head_box := BoxMesh.new()
+	head_box.size = Vector3(0.26, 0.3, 0.28)
+	head_box.material = skin
+	_head_mesh = MeshInstance3D.new()
+	_head_mesh.mesh = head_box
+	_head_mesh.layers = PLAYER_MODEL_LAYER
+
+	head = Node3D.new()
+	head.position.y = EYE_STAND
+	add_child(head)
+	head.add_child(_head_mesh)
+
+	fp_camera = Camera3D.new()
+	fp_camera.near = 0.05
+	fp_camera.fov = fov_normal
+	fp_camera.cull_mask = 0xFFFFF & ~PLAYER_MODEL_LAYER
+	head.add_child(fp_camera)
+
+	_spring = SpringArm3D.new()
+	_spring.spring_length = SPRING_LENGTH
+	_spring.margin = 0.15
+	_spring.position = Vector3(SHOULDER_OFFSET * shoulder, 0.2, 0.0)
+	_spring.add_excluded_object(get_rid())
+	var probe := SphereShape3D.new()
+	probe.radius = 0.2
+	_spring.shape = probe
+	head.add_child(_spring)
+
+	tp_camera = Camera3D.new()
+	tp_camera.near = 0.05
+	tp_camera.fov = fov_normal
+	_spring.add_child(tp_camera)
+
+
+# ---------------------------------------------------------------- input
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var s := aim_look_scale if aiming else 1.0
+		_turn(-event.relative.x * mouse_sensitivity * s, -event.relative.y * mouse_sensitivity * s)
+	elif event is InputEventMouseButton and event.pressed and OS.has_feature("pc"):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	if event.is_action_pressed("toggle_view"):
+		view = View.THIRD if view == View.FIRST else View.FIRST
+		_apply_view()
+	elif event.is_action_pressed("sprint"):
+		var moving := _move_input().length() > 0.2
+		if view == View.THIRD and not moving:
+			shoulder = -shoulder  # L3 while standing still in third person swaps shoulders
+		else:
+			sprinting = not sprinting
+			if sprinting and crouching:
+				_set_crouch(false)
+	elif event.is_action_pressed("swap_shoulder"):
+		shoulder = -shoulder
+	elif event.is_action_pressed("crouch"):
+		_set_crouch(not crouching)
+
+
+func _move_input() -> Vector2:
+	return Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+
+
+func _turn(yaw_deg: float, pitch_deg: float) -> void:
+	rotate_y(deg_to_rad(yaw_deg))
+	pitch = clampf(pitch + pitch_deg, -85.0, 85.0)
+
+
+# ---------------------------------------------------------------- per frame
+
+func _process(delta: float) -> void:
+	# Right-stick look with a squared response curve for fine aiming.
+	var look := Input.get_vector("look_left", "look_right", "look_up", "look_down")
+	if look.length() > 0.0:
+		look = look.normalized() * pow(look.length(), 2.0)
+		var speed := look_speed_deg * (aim_look_scale if aiming else 1.0)
+		_turn(-look.x * speed * delta, -look.y * speed * delta)
+
+	var was_aiming := aiming
+	aiming = Input.is_action_pressed("aim")
+	if aiming != was_aiming:
+		if aiming:
+			sprinting = false
+		_apply_view()
+
+	# Lean (hold L1 / R1).
+	var lean_target := 0.0
+	if Input.is_action_pressed("lean_left"):
+		lean_target -= 1.0
+	if Input.is_action_pressed("lean_right"):
+		lean_target += 1.0
+	if sprinting:
+		lean_target = 0.0
+	lean = move_toward(lean, lean_target, delta * 5.0)
+
+	# Smooth crouch height and eye height.
+	var target_eye := EYE_CROUCH if crouching else EYE_STAND
+	var eye := lerpf(head.position.y, target_eye, minf(1.0, delta * 10.0))
+
+	# Small head bob in first person while moving on the ground.
+	var flat_speed := Vector2(velocity.x, velocity.z).length()
+	var bob := Vector3.ZERO
+	if is_on_floor() and flat_speed > 0.5:
+		_bob_time += delta * flat_speed * 2.2
+		bob = Vector3(cos(_bob_time * 0.5) * 0.025, absf(sin(_bob_time * 0.5)) * 0.035, 0.0)
+	fp_camera.position = bob
+
+	head.position = Vector3(lean * LEAN_OFFSET, eye, 0.0)
+	head.rotation = Vector3(deg_to_rad(pitch), 0.0, deg_to_rad(-lean * LEAN_ROLL_DEG))
+	_spring.position.x = lerpf(_spring.position.x, SHOULDER_OFFSET * shoulder, minf(1.0, delta * 8.0))
+
+	var target_fov := fov_aim if aiming else fov_normal
+	fp_camera.fov = lerpf(fp_camera.fov, target_fov, minf(1.0, delta * 12.0))
+
+
+func _physics_process(delta: float) -> void:
+	var input := _move_input()
+	if input.length() < 0.1:
+		sprinting = false
+
+	var speed := walk_speed
+	if crouching:
+		speed = crouch_speed
+	elif sprinting and input.y < 0.0:  # sprint only while moving forward
+		speed = sprint_speed
+	elif aiming:
+		speed = walk_speed * 0.6
+
+	var dir := (transform.basis * Vector3(input.x, 0.0, input.y))
+	var target := dir * speed
+	velocity.x = move_toward(velocity.x, target.x, acceleration * delta)
+	velocity.z = move_toward(velocity.z, target.z, acceleration * delta)
+	if not is_on_floor():
+		velocity.y -= _gravity * delta
+	move_and_slide()
+
+
+# ---------------------------------------------------------------- state
+
+func _set_crouch(on: bool) -> void:
+	if not on and _blocked_above():
+		return  # stay crouched under low ceilings
+	crouching = on
+	if on:
+		sprinting = false
+	_height = CROUCH_HEIGHT if on else STAND_HEIGHT
+	_shape.height = _height
+	_collision.position.y = _height / 2.0
+	_body_mesh.scale.y = _height / STAND_HEIGHT
+	_body_mesh.position.y = 0.725 * _height / STAND_HEIGHT
+
+
+func _blocked_above() -> bool:
+	var space := get_world_3d().direct_space_state
+	var from := global_position + Vector3.UP * CROUCH_HEIGHT
+	var to := global_position + Vector3.UP * (STAND_HEIGHT + 0.05)
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.exclude = [get_rid()]
+	return not space.intersect_ray(query).is_empty()
+
+
+func effective_view() -> View:
+	return View.FIRST if aiming else view
+
+
+func view_name() -> String:
+	return "First person" if effective_view() == View.FIRST else "Third person"
+
+
+func _apply_view() -> void:
+	var first := effective_view() == View.FIRST
+	fp_camera.current = first
+	tp_camera.current = not first
+	view_changed.emit(view_name())
