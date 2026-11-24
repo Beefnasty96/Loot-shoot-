@@ -62,8 +62,8 @@ const PARTS := {
 		scene = "res://assets/weapons/parts/supp_45.glb", value = 700,
 		description = "Subsonic .45 is quiet through a can: about 30% as loud, no flash. Heavy on the front."},
 	# --- grips
-	"grips_1911_walnut": {name = "1911 walnut grips", type = "grips_1911", weight = 0.05, scene = "", size = Vector2i(1, 1),
-		description = "Double-diamond checkered walnut."},
+	"grips_1911_walnut": {name = "1911 rosewood grips", type = "grips_1911", weight = 0.05, scene = "", size = Vector2i(1, 1),
+		description = "Double-diamond checkered rosewood, the stock grips."},
 	"grips_1911_rubber": {name = "1911 wraparound rubber grips", type = "grips_1911", weight = 0.06, ergo = 6, recoil = -0.06, size = Vector2i(1, 1),
 		scene = "res://assets/weapons/parts/grips_1911_rubber.glb", value = 40,
 		description = "Finger grooves, soaks up some kick."},
