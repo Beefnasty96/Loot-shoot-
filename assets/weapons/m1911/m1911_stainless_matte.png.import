@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dnblw40sib1k7"
-path="res://.godot/imported/m1911_steel_blued.png-44cb234f9a721c30b7a7c4203e2279c1.ctex"
+uid="uid://dx7jnhxjoq5ut"
+path="res://.godot/imported/m1911_stainless_matte.png-42bdf59dc70ea390c1a1fb33bdabeb99.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "8a75a847e818dbf3151bbd032b43bb3b"
+"md5": "8ece40dbadde9b32abd90d36a2cf1fff"
 }
 
 [deps]
 
-source_file="res://assets/weapons/m1911/m1911_steel_blued.png"
-dest_files=["res://.godot/imported/m1911_steel_blued.png-44cb234f9a721c30b7a7c4203e2279c1.ctex"]
+source_file="res://assets/weapons/m1911/m1911_stainless_matte.png"
+dest_files=["res://.godot/imported/m1911_stainless_matte.png-42bdf59dc70ea390c1a1fb33bdabeb99.ctex"]
 
 [params]
 

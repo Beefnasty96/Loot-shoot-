@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://uvjdrk74aack"
-path="res://.godot/imported/m1911_grip_walnut.png-633d7e3b9277816a83f5a0e299632e4b.ctex"
+uid="uid://cx3g7ui0n3kk8"
+path="res://.godot/imported/m1911_rollmark_frame.png-936f058476172b087adb479e5f21d375.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "d34f52512eb80847d9dcde41a834b74b"
+"md5": "6ddc9386bf49cd9cc35be17a41558a2d"
 }
 
 [deps]
 
-source_file="res://assets/weapons/m1911/m1911_grip_walnut.png"
-dest_files=["res://.godot/imported/m1911_grip_walnut.png-633d7e3b9277816a83f5a0e299632e4b.ctex"]
+source_file="res://assets/weapons/m1911/m1911_rollmark_frame.png"
+dest_files=["res://.godot/imported/m1911_rollmark_frame.png-936f058476172b087adb479e5f21d375.ctex"]
 
 [params]
 
