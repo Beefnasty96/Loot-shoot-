@@ -31,6 +31,8 @@ const J_TO_FTLB := 0.737562
 @export var ricochet_factor := 1.0        ## Scales each material's ricochet angle.
 @export var disintegrates_on_hard := false
 @export var plus_p := false
+@export var dispersion_moa := 0.0         ## The load's own group size (extreme spread, MOA); adds to the gun's.
+@export var vel_sd_fps := 0.0             ## Shot-to-shot muzzle velocity spread (1 standard deviation).
 @export var fps_per_inch := 0.0           ## Velocity gained/lost per inch of barrel vs the reference. 0 = 1.8% of muzzle (pistol).
 # --- Rifle bullets: they fly nose-first through the first few inches of tissue, then
 #     turn sideways (yaw). Fast enough and they break apart (fragment) as they turn.
@@ -38,7 +40,8 @@ const J_TO_FTLB := 0.737562
 @export var yaw_neck_in := 0.0            ## Inches of tissue before it yaws. 0 = not a yawing rifle bullet.
 @export var gel_nose_in := 0.0            ## Penetration it would have if it stayed nose-first: sets the (low) drag before the yaw.
 @export var hard_ref_in := 0.0            ## Gel-equivalent penetration nose-first into hard barriers (steel, glass, masonry).
-@export var frag_min_fps := 0.0           ## Fragments if still at least this fast when it yaws. 0 = never.
+@export var frag_min_fps := 0.0           ## Fragments if it hits at least this fast. 0 = never.
+@export var split_min_fps := 0.0          ## Between this and frag_min_fps it breaks in two instead. 0 = no such band.
 @export var gel_frag_in := 0.0            ## Penetration beyond the neck when it fragments (at reference velocity).
 @export var frag_wound_ratio := 1.0       ## Wound channel vs bore, fragmenting.
 @export var tumble_wound_ratio := 1.0     ## Wound channel vs bore, yawed but in one piece.

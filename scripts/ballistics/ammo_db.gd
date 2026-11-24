@@ -77,29 +77,45 @@ static func _ensure() -> void:
 	# wall) and they just tumble. A thin arm or a grazing hit never gets past the
 	# neck: a small "icepick" hole straight through. (Fackler/WDTL gel work.)
 
-	# 7. M193 ball: 55gr FMJBT, 3240 fps / 20", G1 ~.243. Yaws at ~4.7" (12 cm) and
-	#    fragments reliably above ~2700 fps impact (inside ~150 m from an M4).
+	# Fragmentation is decided by IMPACT velocity: above frag_min_fps it breaks up,
+	# between split_min_fps and that it breaks in two (the core and jacket part),
+	# below split_min_fps it only yaws. Distance to 2700 fps from a 14.5" barrel:
+	# M193 ~95-100 m; M855 anywhere from ~45 to ~125 m depending on the source's
+	# muzzle velocity and threshold. With the Army's M4 velocities and published BCs
+	# the simulation gives M193 ~95 m, M855 ~75 m (then it splits out to ~165 m).
+	# Accuracy: each load has its own dispersion (dispersion_moa, extreme spread),
+	# combined with the gun's (WeaponDB moa) as sqrt(gun^2 + ammo^2), and a muzzle
+	# velocity spread (vel_sd_fps) that opens groups vertically at range.
+
+	# 7. M193 ball: 55gr FMJBT, 3240 fps / 20", ~2990 fps from an M4 (Army figure 2,986),
+	#    G1 ~.243. Yaws at ~4.7" (12 cm), fragments above 2700 fps impact.
 	_add({id = "556_1_m193", display_name = "M193 55gr ball", short_name = "M193", caliber = "5.56 NATO",
-		construction = T.FMJ, mass_grains = 55.0, muzzle_fps = 3240.0, reference_barrel_in = 20.0, fps_per_inch = 35.0,
+		construction = T.FMJ, mass_grains = 55.0, muzzle_fps = 3240.0, reference_barrel_in = 20.0, fps_per_inch = 46.2,
+		dispersion_moa = 2.0, vel_sd_fps = 25.0, split_min_fps = 2500.0,
 		bc_g1 = 0.243, diameter_in = 0.224, gel_unexpanded_in = 11.0, gel_nose_in = 90.0, hard_ref_in = 30.0,
 		yaw_neck_in = 4.7, frag_min_fps = 2700.0, gel_frag_in = 8.0, frag_wound_ratio = 2.7, tumble_wound_ratio = 1.7,
 		frag_retained = 0.55, hard_barrier_factor = 1.0, ricochet_factor = 1.1,
 		notes = "Fast, light, fragments violently up close. Fragmentation range shrinks fast with a short barrel. Mild steel to ~1/4 in."})
 
-	# 8. M855 / SS109 "green tip": 62gr with a 7gr steel penetrator, 3100 fps / 20", G1 ~.304.
-	#    Yaws later (~5") and less predictably; fragments above ~2500 fps.
+	# 8. M855 / SS109 "green tip": 62gr with a 7gr steel penetrator, ~3100 fps / 20",
+	#    2,887 fps from an M4 (Army figure), G1 ~.304. Yaws later (~5") and less predictably;
+	#    fragments above 2700 fps impact, breaks in two down to 2500 fps (NDIA / Roberts).
+	#    The off-centre steel core costs accuracy: ~3 MOA from a service M4.
 	#    Steel tip punches 3.5 mm mild steel at 1300 m (the NATO spec plate).
 	_add({id = "556_2_m855", display_name = "M855 62gr green tip", short_name = "M855", caliber = "5.56 NATO",
-		construction = T.PENETRATOR, mass_grains = 62.0, muzzle_fps = 3100.0, reference_barrel_in = 20.0, fps_per_inch = 35.0,
+		construction = T.PENETRATOR, mass_grains = 62.0, muzzle_fps = 3100.0, reference_barrel_in = 20.0, fps_per_inch = 38.7,
+		dispersion_moa = 3.0, vel_sd_fps = 30.0, split_min_fps = 2500.0,
 		bc_g1 = 0.304, diameter_in = 0.224, gel_unexpanded_in = 13.0, gel_nose_in = 100.0, hard_ref_in = 36.0,
-		yaw_neck_in = 5.0, frag_min_fps = 2500.0, gel_frag_in = 9.0, frag_wound_ratio = 2.3, tumble_wound_ratio = 1.6,
+		yaw_neck_in = 5.0, frag_min_fps = 2700.0, gel_frag_in = 9.0, frag_wound_ratio = 2.3, tumble_wound_ratio = 1.6,
 		frag_retained = 0.65, hard_barrier_factor = 0.65, ricochet_factor = 0.9,
 		notes = "Steel penetrator: much better through steel and car bodies. Flies flatter. Inconsistent fragmentation."})
 
 	# 9. M856 tracer: 63.7gr, ~3050 fps / 20", orange tip. Trace visible to ~800 m.
-	#    Lead-light base full of tracer compound: tends to yaw and break up less.
+	#    Lead-light base full of tracer compound: tends to yaw and break up less, and
+	#    groups about twice as big as ball.
 	_add({id = "556_3_m856", display_name = "M856 63.7gr tracer", short_name = "M856", caliber = "5.56 NATO",
 		construction = T.FMJ, mass_grains = 63.7, muzzle_fps = 3050.0, reference_barrel_in = 20.0, fps_per_inch = 35.0,
+		dispersion_moa = 4.0, vel_sd_fps = 35.0, split_min_fps = 2550.0,
 		bc_g1 = 0.29, diameter_in = 0.224, gel_unexpanded_in = 12.0, gel_nose_in = 90.0, hard_ref_in = 32.0,
 		yaw_neck_in = 5.5, frag_min_fps = 2750.0, gel_frag_in = 9.0, frag_wound_ratio = 2.0, tumble_wound_ratio = 1.6,
 		frag_retained = 0.7, hard_barrier_factor = 1.0, ricochet_factor = 1.0, tracer = true, tracer_range_m = 800.0,

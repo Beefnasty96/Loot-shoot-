@@ -44,7 +44,7 @@ const WEAPONS := {
 	},
 	"m4a1": {
 		name = "M4A1 carbine", kind = "rifle", slot = "primary", caliber = "5.56 NATO", action = "auto", modes = ["semi", "auto"], rpm = 800,
-		barrel_in = 14.5, weight = 2.95, size = Vector2i(5, 2), ergo = 52, recoil = 1.0, moa = 2.0,
+		barrel_in = 14.5, weight = 2.95, size = Vector2i(5, 2), ergo = 52, recoil = 1.0, moa = 1.5,   # barrel; ammo adds its own (M855: ~3.4 MOA total)
 		scene = "res://assets/weapons/m4a1/m4a1.glb", sound = "shot_556", value = 1800,
 		description = "14.5 in select-fire carbine: flat-top upper with a detachable carry handle, quad rail. Hold Y for semi / auto.",
 		rig = {

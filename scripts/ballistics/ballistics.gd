@@ -52,6 +52,7 @@ class Bullet:
 	var deformed := false
 	var yawed := false              ## Rifle bullet already turned sideways (tumbling).
 	var fragmented := false
+	var split := false              ## Broke in two rather than fragmenting.
 	var mass_frac := 1.0            ## What's left of it after fragmenting.
 	var alive := true
 	var time := 0.0
@@ -294,7 +295,7 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 ## A rifle bullet's penetration through `needed` gel-mm, phase by phase. Speed is
 ## the state carried between phases; each phase has its own reference depth:
 ##  nose-first (gel_nose_in) -> yaw at the neck -> fragmenting (gel_frag_in) or
-##  tumbling (gel_unexpanded_in). Returns {capacity, p_ref} in the units of the
+##  tumbling (gel_unexpanded_in), or in between if it splits. Returns {capacity, p_ref} in the units of the
 ##  phase it ends in (so the caller's stop/exit maths works unchanged) and `yaw`.
 func _rifle_path(b: Bullet, speed: float, needed: float, gel_factor: float, tissue: bool, hard: bool) -> Dictionary:
 	var a := b.ammo
@@ -318,11 +319,21 @@ func _rifle_path(b: Bullet, speed: float, needed: float, gel_factor: float, tiss
 	b.yawed = true
 	var p_after := p_tumble
 	var yaw := "tumbled"
-	if a.frag_min_fps > 0.0 and AmmoType.ms_to_fps(v_neck) >= a.frag_min_fps:
+	# What it does when it turns depends on how fast it hit (the published thresholds
+	# are impact velocities).
+	var impact_fps := AmmoType.ms_to_fps(speed)
+	if a.frag_min_fps > 0.0 and impact_fps >= a.frag_min_fps:
 		b.fragmented = true
 		b.mass_frac = a.frag_retained
 		p_after = a.gel_frag_in * 25.4
 		yaw = "fragmented"
+	elif a.split_min_fps > 0.0 and impact_fps >= a.split_min_fps:
+		# Breaks in two at the cannelure: less violent than full fragmentation.
+		b.fragmented = true
+		b.mass_frac = (a.frag_retained + 1.0) / 2.0
+		p_after = (a.gel_frag_in + a.gel_unexpanded_in) / 2.0 * 25.4
+		b.split = true
+		yaw = "split"
 	# Express the whole path in after-yaw units: neck already crossed + what's left.
 	var cap_after := p_after * maxf(0.0, (v_neck - V_MIN) / span)
 	return {capacity = neck + cap_after, p_ref = p_after, yaw = yaw}
@@ -331,6 +342,8 @@ func _rifle_path(b: Bullet, speed: float, needed: float, gel_factor: float, tiss
 ## Diameter of the wound channel relative to bore diameter.
 func _wound_ratio(b: Bullet) -> float:
 	var a := b.ammo
+	if b.split:
+		return (a.frag_wound_ratio + a.tumble_wound_ratio) / 2.0
 	if b.fragmented:
 		return a.frag_wound_ratio
 	if b.yawed:

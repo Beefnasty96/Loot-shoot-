@@ -478,7 +478,11 @@ func _shoot(ammo: AmmoType) -> void:
 		var target: Vector3 = hit.position if not hit.is_empty() else cam_pos + fwd * 300.0
 		dir = (target - origin).normalized()
 	dir = _apply_spread(dir)
-	Ballistics.fire(origin, dir, ammo, player.get_rid(), velocity_factor(ammo), player.hitbox_rids(), stats.loudness)
+	# Shot-to-shot velocity spread (vertical stringing at range).
+	var vf := velocity_factor(ammo)
+	if ammo.vel_sd_fps > 0.0:
+		vf *= 1.0 + randfn(0.0, ammo.vel_sd_fps) / ammo.muzzle_fps
+	Ballistics.fire(origin, dir, ammo, player.get_rid(), vf, player.hitbox_rids(), stats.loudness)
 
 	# Recoil from the bullet's momentum (+P loads kick harder). A rifle's stock and
 	# weight keep each kick small, but in auto it adds up (and drifts right-handed: up and right).
@@ -496,7 +500,10 @@ func _shoot(ammo: AmmoType) -> void:
 
 
 func spread_degrees() -> float:
-	var s := float(stats.get("moa", 3.0)) / 60.0 * 0.5
+	# Mechanical accuracy of the gun combined with the load's own dispersion.
+	var ammo_moa := chambered.dispersion_moa if chambered else 0.0
+	var moa := sqrt(pow(float(stats.get("moa", 3.0)), 2.0) + ammo_moa * ammo_moa)
+	var s := moa / 60.0 * 0.5
 	if player.aiming:
 		s += float(rig.sight_hold)
 	else:

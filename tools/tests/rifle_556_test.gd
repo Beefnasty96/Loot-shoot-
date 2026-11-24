@@ -74,7 +74,27 @@ func _process(_d: float) -> bool:
 		var m193 := AmmoDB.get_ammo("556_1_m193")
 		var vf := m193.velocity_factor(14.5)
 		print("M193 from 14.5 in: %d fps (x%.3f)" % [roundi(m193.muzzle_fps * vf), vf])
-		check(absf(m193.muzzle_fps * vf - 3047.5) < 1.0, "M193 loses 35 fps per inch from 20 in: ~3048 fps from the M4")
+		check(absf(m193.muzzle_fps * vf - 2986.0) < 5.0, "M193 from the M4: ~2,986 fps (Army figure)")
+		var m855 := AmmoDB.get_ammo("556_2_m855")
+		print("M855 from 14.5 in: %d fps" % roundi(m855.muzzle_fps * m855.velocity_factor(14.5)))
+		check(absf(m855.muzzle_fps * m855.velocity_factor(14.5) - 2887.0) < 5.0, "M855 from the M4: ~2,887 fps (Army figure)")
+		# Fragmentation range: how far until it drops under 2700 fps.
+		for id in ["556_1_m193", "556_2_m855"]:
+			var a := AmmoDB.get_ammo(id)
+			var b = B.fire(lab.global_position + Vector3(0, 300, 0), Vector3(0, 0, -1), a, RID(), a.velocity_factor(14.5))
+			var start: Vector3 = b.pos
+			var drop_at := -1.0
+			for i in 120:
+				B._physics_process(1.0 / 120.0)
+				if AmmoType.ms_to_fps(b.vel.length()) < 2700.0:
+					drop_at = start.distance_to(b.pos)
+					break
+			b.alive = false
+			print("  %s from an M4 is under 2700 fps at %d m" % [a.short_name, roundi(drop_at)])
+			if id == "556_1_m193":
+				check(drop_at > 85.0 and drop_at < 115.0, "M193 fragments out to ~95-100 m from an M4 (%d m)" % roundi(drop_at))
+			else:
+				check(drop_at > 55.0 and drop_at < 95.0, "M855 fragments out to ~75 m from an M4, less than M193 (%d m)" % roundi(drop_at))
 		var fmj := AmmoDB.get_ammo("45_1_fmj230")
 		check(absf(fmj.velocity_factor(5.5) - 1.009) < 0.002, ".45 still gains ~1.8%/in from its 5 in reference")
 		check(AmmoDB.all_for("5.56 NATO").size() == 3, "three 5.56 loads: M193, M855, M856")
@@ -219,6 +239,17 @@ func _process(_d: float) -> bool:
 			"rear aperture and front post line up on the eye")
 		check(rear.z < -0.06 and rear.z > -0.12, "cheek weld: the aperture is %.0f mm from the eye" % (-rear.z * 1000.0))
 		check(absf(p.fp_camera.fov - 55.0) < 1.5, "aiming narrows the view to 55 deg")
+		var fa = p.firearm
+		var keep = fa.chambered
+		fa.chambered = AmmoDB.get_ammo("556_1_m193")
+		var s193: float = fa.spread_degrees()
+		fa.chambered = AmmoDB.get_ammo("556_2_m855")
+		var s855: float = fa.spread_degrees()
+		fa.chambered = AmmoDB.get_ammo("556_3_m856")
+		var s856: float = fa.spread_degrees()
+		fa.chambered = keep
+		print("aimed spread (deg): M193 %.3f  M855 %.3f  M856 %.3f" % [s193, s855, s856])
+		check(s193 < s855 and s855 < s856, "M193 groups tighter than M855, tracers worst")
 		wall_hits.clear()
 	for k in 6:
 		if f == 659 + k * 25:

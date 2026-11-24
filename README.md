@@ -105,11 +105,13 @@ On impact a bullet either ricochets (shallow angle on hard surfaces), turns to d
 
 **5.56 NATO behaves like a rifle bullet.** It goes in nose-first for 4.7-5.5" of tissue (the "neck"), losing little speed, then turns sideways. If it's still fast enough when it turns it fragments: a much bigger wound (x2-2.7 the bore) that stops sooner, with the biggest piece keeping 55-70% of the weight. Slower (longer range, shorter barrel, through a wall) and it just tumbles: deeper, smaller wound. A thin limb or a graze never reaches the neck: a small "icepick" hole straight through that leaves ~7% of the energy behind. Walls knock it off balance, so it arrives at whatever is behind already tumbling. On steel it punches nose-first; M855's steel penetrator does much better there. Tracers (M856) draw a glowing streak from ~12 m out until they burn out at ~800 m, debug view or not.
 
-| Load (5.56 NATO, 20" ref.) | From the M4 (14.5") | Energy | Fragments above | Gel | Notes |
-| --- | --- | --- | --- | --- | --- |
-| M193 55gr ball | 3048 fps | 1135 ft-lb | 2700 fps | ~12" fragmenting | Violent fragmentation up close; mild steel to ~1/4 in is too much |
-| M855 62gr green tip | 2908 fps | 1164 ft-lb | 2500 fps | ~13" fragmenting | Steel penetrator: through 1/4 in mild steel; flatter; inconsistent fragmentation |
-| M856 63.7gr tracer | 2858 fps | 1155 ft-lb | 2750 fps | ~16" tumbling | Trace to ~800 m: shows where you shoot - and where you are |
+| Load (5.56 NATO, 20" ref.) | From the M4 (14.5") | Energy | Fragments (impact) | Under 2700 fps at | Group (M4) | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| M193 55gr ball | 2986 fps | 1089 ft-lb | above 2700 fps; splits 2500-2700 | ~100 m | ~2.5 MOA | Violent fragmentation up close; can't get through 1/4 in mild steel |
+| M855 62gr green tip | 2887 fps | 1148 ft-lb | above 2700 fps; splits 2500-2700 | ~78 m | ~3.4 MOA | Steel penetrator: through 1/4 in mild steel; less accurate (off-centre core) |
+| M856 63.7gr tracer | 2858 fps | 1155 ft-lb | above 2750 fps; splits 2550-2750 | - | ~4.3 MOA | Trace to ~800 m: shows where you shoot - and where you are |
+
+Velocities from the M4 are the Army's figures. Group = the M4's barrel (1.5 MOA) combined with each load's own dispersion, plus shot-to-shot velocity spread (25-35 fps) that strings shots vertically at range. Between "splits" and "fragments" the bullet breaks in two at the cannelure: a wound between tumbling and full fragmentation.
 
 Data: `scripts/ballistics/ammo_db.gd`. Materials: `scripts/ballistics/materials.gd`.
 
