@@ -6,6 +6,7 @@ extends Node3D
 ## (hollow-core interior door or solid exterior door).
 
 const SWING_SPEED := 2.6        ## rad/s
+const LAYER := 32               ## Physics layer 6: doors. Bullets, people and melee include it.
 const OPEN_ANGLE := deg_to_rad(95.0)
 
 var width := 0.76
@@ -31,6 +32,8 @@ func _ready() -> void:
 	_panel = AnimatableBody3D.new()
 	_panel.sync_to_physics = false
 	_panel.set_meta("material", ballistic)
+	_panel.collision_layer = LAYER     # its own layer so the navmesh bake ignores doors (AI opens them)
+	_panel.collision_mask = 0
 	_panel.position = Vector3(width / 2.0, height / 2.0, 0.0)
 	_hinge.add_child(_panel)
 	var shape := BoxShape3D.new()

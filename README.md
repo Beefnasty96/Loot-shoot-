@@ -155,6 +155,8 @@ godot --headless --fixed-fps 60 -s tools/tests/blood_test.gd      # wound bleed 
 godot --headless --fixed-fps 60 -s tools/tests/wounded_test.gd    # limp, limp arm, clutching wounds, hunching, going down, shock
 godot --headless --fixed-fps 60 -s tools/tests/knife_test.gd      # Ka-Bar: switching, stab/slash wounds, clothing, blade blood, spurts
 godot --headless --fixed-fps 60 -s tools/tests/shoot_house_test.gd # house: rooms, doors, walls vs bullets, windows
+godot --headless --fixed-fps 60 -s tools/tests/enemy_ai_test.gd   # navmesh, sight, hearing, doors, shooting, knife, cover, meds, death
+godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as items, attachment tree, stats, models, light, suppressor + hearing, drops
 ```
 
 ## Bodies and hit reactions
@@ -195,3 +197,36 @@ Main menu > "Play (shoot house)". It's a 1995 suburban ranch house built in code
 - **Construction is real to bullets:** interior walls are 2x4 and drywall (a .45 goes through), exterior walls are siding, OSB, batts and drywall, interior doors are hollow-core and the front door is solid. Brick, porcelain, appliance steel and the car stop or slow rounds by their material. Windows break and stay broken.
 - **Doors:** A opens a door away from you and closes it.
 - **Performance:** static meshes are merged per material in 5 m cells (`LevelKit.batch_meshes`), about 600 draw calls down to about 200.
+
+## Enemy AI
+
+The shoot house has five armed occupants (`scripts/ai/enemy.gd`, built on `Npc`): pistol "holders" covering the front door and the master bedroom door, pistol "pushers" patrolling the kitchen/dining and family/hall, and a knife man waiting by the kid's-room door. The HUD counts them down and times you; the house is clear when they're all dead or can't fight.
+
+- **Sight:** a vision cone (almost all round once alert), with line of sight through glass but not walls or closed doors. Awareness builds faster the closer you are and slower if you're crouched.
+- **Hearing:** gunshots through walls (close ones give away where you are) and running footsteps within a few meters. A round cracking close by makes them take cover.
+- **States:** idle/patrol, then suspicious, investigate, combat, cover, search, and back to idle. Holders hold their spot; pushers come and find you.
+- **Shooting:** a reaction delay when they first spot you, then aimed pairs. The error grows with distance, your movement, their own movement, and their wounds (hurt arms, blood loss, pain). They carry real magazines (lootable from the body), reload behind cover and drop the gun when they die.
+- **Knife enemies:** they rush you and stab or slash with the same blade model as your Ka-Bar.
+- **Movement:** a navmesh is baked from the level at load. Doors are on their own physics layer, so paths go through doorways and the AI opens doors on the way. Wounded enemies limp and go down like anyone else, and they still shoot from the floor if their arms work.
+
+## Your body
+
+You have the same hitboxes, DamageModel, wounds and bleeding as everyone else (`Vitals`). Hurt legs slow you and stop you sprinting. Hurt arms, pain and blood loss widen your spread and shake your aim. Losing blood greys out your vision, and at 40% lost you die. The HUD shows a body diagram (bottom left) with your bleed status and blood level.
+
+D-pad up treats you with what you carry, taking a few seconds with no shooting meanwhile. The IFAK stops every bleed (arterial too), the car kit bandages light bleeds and gives +15 HP, and painkillers dull the pain for 2 minutes. You start with an IFAK in your pocket. When you die, your body ragdolls, the camera pulls back, and you can choose A to try again or Y for the main menu.
+
+## Guns, knives and attachments (WeaponDB)
+
+Weapons are inventory items. You have three weapon slots: Primary (for long guns), Holster and Sheath. Enemies have the same slots and drop their weapon on death, magazine, chambered round and parts included. Guns lie on the floor as their models; A picks one up, straight into an empty slot. Y cycles through what you carry, or leaves you unarmed if you carry nothing.
+
+Everything is data in `scripts/weapons/weapon_db.gd`:
+- **Adding a gun** is one `WEAPONS` entry: kind, slot, caliber, action, rpm, barrel length, weight, size, ergonomics, recoil, accuracy, model, sound and slots. Each slot lists the part types it accepts, whether it's required, the default part, the attach point and the model node it rides on (e.g. the slide).
+- **Adding an attachment** is one `PARTS` entry plus a model (`tools/blender/parts_build.py`). A part can change weight, size, ergonomics, recoil, barrel length (which sets velocity), loudness, aim speed, glowing sights, a light, muzzle length, muzzle flash and the gunshot sound. It can also bring slots of its own.
+- **Builds are a tree**, like Tarkov. The 1911's threaded barrel brings a muzzle slot for the suppressor, and the rail adapter brings a tactical slot for the light. Magazines plug into a slot that accepts a magazine family, so the same well takes 7- and 8-round 1911 magazines.
+- **Stats:** `WeaponDB.stats(gun)` adds up the whole build. `WeaponDB.assemble(gun, model)` builds the part models on the first-person gun, the third-person gun, enemy guns and guns lying on the floor.
+
+In the inventory, drop a magazine or part on a gun (in a grid or in your holster) to fit it; a magazine swaps with the one inside. Y on a gun opens it up: the slot tree with the totals (weight, ergonomics, recoil, barrel length and velocity, loudness). Required parts (barrel, grips, sights) can only be swapped, not left empty. A longer gun (with a suppressor) takes more squares.
+
+1911 parts so far (the range's "Gun parts" bench): a threaded 5.5 in barrel, a .45 suppressor, a dust-cover rail adapter, an M3-style weapon light, wraparound rubber grips, tritium night sights and 8-round magazines.
+- **Suppressor:** shots are about 30% as loud. Enemies hear them at about a third of the distance, there's no muzzle flash, and recoil is 12% softer, but the gun is slower to handle.
+- **Light:** D-pad down turns it on; hold D-pad down for the bullet-path readout.

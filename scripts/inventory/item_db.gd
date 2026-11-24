@@ -43,6 +43,28 @@ static func _ensure() -> void:
 		"Single-stack .45 ACP. Drop loose rounds on it to load.")
 	mag.mag_capacity = 7
 	mag.caliber = ".45 ACP"
+	mag.mag_family = "mag_1911"
+	var mag8 := _add("mag_1911_8", "1911 magazine (8 rd)", "Mag 8", C.MAGAZINE, Vector2i(1, 1), 0.13, 1, 35,
+		"Extended-follower 8-rounder. Same well, one more round.")
+	mag8.mag_capacity = 8
+	mag8.caliber = ".45 ACP"
+	mag8.mag_family = "mag_1911"
+	mag8.icon_path = ICONS % "mag_1911"
+	# Weapons and attachments come from WeaponDB. Weight here is the bare weapon/part;
+	# InvItem.weight() adds everything mounted on it.
+	for wid: String in WeaponDB.WEAPONS:
+		var w: Dictionary = WeaponDB.WEAPONS[wid]
+		var d := _add(wid, w.name, w.name.split(" ")[-1] if w.name.length() > 8 else w.name, C.WEAPON, w.size, w.weight, 1, w.get("value", 100), w.get("description", ""))
+		d.weapon_id = wid
+		d.weapon_slot = w.slot
+		d.weapon_kind = w.kind
+		d.caliber = w.get("caliber", "")
+		d.scene_path = w.scene
+	for pid: String in WeaponDB.PARTS:
+		var p: Dictionary = WeaponDB.PARTS[pid]
+		var d := _add(pid, p.name, _part_short(p), C.PART, p.get("size", Vector2i(1, 1)), p.weight, 1, p.get("value", 20), p.get("description", ""))
+		d.part_id = pid
+		d.scene_path = p.get("scene", "")
 	# Loose rounds, one stack type per load.
 	for a in AmmoDB.all_for(".45 ACP"):
 		var r := _add(a.id, ".45 ACP " + a.display_name, a.short_name, C.AMMO, Vector2i(1, 1), round_weight(a), 50, 1,
@@ -61,6 +83,17 @@ static func _ensure() -> void:
 	_add("docs", "Classified folder", "Docs", C.VALUABLE, Vector2i(1, 1), 0.3, 1, 2500, "Government building loot.")
 	_add("gpu", "Graphics card", "GPU", C.TECH, Vector2i(2, 1), 1.0, 1, 800, "Office loot.")
 	_add("laptop", "Laptop", "Laptop", C.TECH, Vector2i(3, 2), 2.2, 1, 400, "Office loot.")
+
+
+static func _part_short(p: Dictionary) -> String:
+	match String(p.type).split("_")[0]:
+		"barrel": return "Barrel"
+		"muzzle": return "Supp"
+		"grips": return "Grips"
+		"sights": return "Sights"
+		"mount": return "Rail"
+		"tactical": return "Light"
+	return "Part"
 
 
 static func _short(name: String) -> String:
