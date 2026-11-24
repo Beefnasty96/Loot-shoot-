@@ -4,6 +4,7 @@ extends Node3D
 ## controls (D-pad + A/B) and the touchscreen.
 
 const RANGE_SCENE := "res://scenes/shooting_range.tscn"
+const HOUSE_SCENE := "res://scenes/shoot_house.tscn"
 const CREDITS := [
 	["LOOT SHOOT", ""],
 	["Game design", "Beefnasty96"],
@@ -120,6 +121,7 @@ func _page_main() -> Control:
 	sub.add_theme_font_size_override("font_size", 22)
 	box.add_child(sub)
 	_button(box, "Play (range)", func(): get_tree().change_scene_to_file(RANGE_SCENE))
+	_button(box, "Play (shoot house)", func(): get_tree().change_scene_to_file(HOUSE_SCENE))
 	_button(box, "Settings", func(): _show("settings"))
 	_button(box, "Quit", func(): get_tree().quit())
 	return box.get_parent()
