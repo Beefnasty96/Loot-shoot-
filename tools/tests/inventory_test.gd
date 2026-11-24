@@ -63,7 +63,7 @@ func _process(_d: float) -> bool:
 		# Inventory screen: open the crate, drop a stack of JHP rounds on the empty mag in the pocket.
 		var crate = null
 		for n in range_scene.get_children():
-			if n.is_in_group("loot_container"):
+			if n.is_in_group("loot_container") and n.title == "Supply crate":
 				crate = n
 		var inv = null
 		for c in range_scene.find_children("*", "Control", true, false):

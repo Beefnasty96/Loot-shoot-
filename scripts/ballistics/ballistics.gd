@@ -15,7 +15,7 @@ extends Node
 
 signal impact(info: Dictionary)
 signal melee_impact(info: Dictionary)
-signal gunshot(origin: Vector3, shooter: RID)   ## Every shot fired, for AI hearing.   ## Blade contacts (Melee.strike), for the HUD and sounds.
+signal gunshot(origin: Vector3, shooter: RID, loudness: float)   ## Every shot fired, for AI hearing (1 = unsuppressed).   ## Blade contacts (Melee.strike), for the HUD and sounds.
 
 const GRAVITY := 9.81
 const AIR_DENSITY := 1.225
@@ -77,11 +77,11 @@ func _ready() -> void:
 
 
 ## Fire one bullet. `velocity_factor` scales muzzle velocity for barrels shorter/longer than the reference.
-func fire(origin: Vector3, direction: Vector3, ammo: AmmoType, shooter: RID, velocity_factor := 1.0, exclude: Array[RID] = []) -> Bullet:
+func fire(origin: Vector3, direction: Vector3, ammo: AmmoType, shooter: RID, velocity_factor := 1.0, exclude: Array[RID] = [], loudness := 1.0) -> Bullet:
 	var b := Bullet.new()
 	b.exclude.append(shooter)
 	b.exclude.append_array(exclude)
-	gunshot.emit(origin, shooter)
+	gunshot.emit(origin, shooter, loudness)
 	b.ammo = ammo
 	b.pos = origin
 	b.vel = direction.normalized() * ammo.muzzle_ms() * velocity_factor
