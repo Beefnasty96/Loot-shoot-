@@ -154,3 +154,12 @@ save("knife_hit_hard.wav", pad(mix(burst(0.04, 2500, 0.0002, 0.005), ring(3600, 
 
 scrape = sweep_noise(0.35, 2500, 4500, 0.15) * env(int(SR * 0.35), 0.05, 0.25)
 save("knife_draw.wav", pad(mix(scrape, ring(4200, 0.3, 0.05, 0.15)), 0.4), 0.45)
+
+
+# --- Suppressed .45: subsonic, so no crack: a dull "thup", the slide cycling, a little hiss.
+n = noise(0.5)
+thup = lowpass(n, 380) * env(len(n), 0.001, 0.035) * 3.0
+hiss = highpass(noise(0.5), 3000) * env(len(n), 0.002, 0.05) * 0.25
+clack = pad(mix(burst(0.03, 1800, 0.0002, 0.006), ring(2600, 0.08, 0.015, 0.4)), 0.5)
+clack = np.roll(clack, int(SR * 0.012))
+save("shot_45_supp.wav", thup + hiss + clack * 0.9, 0.7)

@@ -190,7 +190,7 @@ func _build_pause_panel() -> void:
 		"X ................. reload (hold: check magazine)",
 		"Y ................. switch 1911 / Ka-Bar (knife: R2 slash, L2+R2 stab)",
 		"D-pad left/right .. load for your NEXT magazine",
-		"D-pad down ........ bullet paths + ballistics readout",
+		"D-pad down ........ weapon light (hold: bullet paths + ballistics readout)",
 		"R3 ................ first / third person",
 		"L3 ................ sprint (3rd person, standing: swap shoulder)",
 		"L1 / R1 ........... lean         B ......... crouch",
@@ -309,7 +309,11 @@ func _process(_delta: float) -> void:
 	_ammo_info.visible = not dead and not open
 
 	var f := player.firearm
-	if player.active_weapon == "knife":
+	if player.active_weapon == "none":
+		_ammo_big.text = "UNARMED"
+		_ammo_info.text = "Put a weapon in your holster or sheath (inventory)."
+		_mag_check.text = ""
+	elif player.active_weapon == "knife":
 		_ammo_big.text = "KA-BAR"
 		var lines := ["R2: slash     L2 + R2: stab", "Y: back to the 1911"]
 		if player.knife.blood > 0.05:
@@ -324,6 +328,8 @@ func _process(_delta: float) -> void:
 		lines.append("Chamber: %s" % f.current_ammo_name())
 		lines.append("Mag: %s" % (f.mag_ammo.display_name if f.has_mag else "none"))
 		lines.append("Next mag:  <  %s  >  (%d spare)" % [f.next_ammo().display_name, f.spare_count(f.next_ammo())])
+		if f.gun:
+			lines.push_front(f.gun.def.display_name + ("   [LIGHT ON]" if f.light_on else ""))
 		if f.reloading:
 			lines.push_front("RELOADING")
 		elif f.slide_locked:

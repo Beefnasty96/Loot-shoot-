@@ -1,6 +1,11 @@
 class_name Firearm
 extends Node
-## The M1911: one round in the chamber plus a 7-round single-stack magazine.
+## Runs the gun in your holster: an InvItem (WeaponDB weapon) carrying its own
+## chambered round, magazine and attachment tree. Calibre, accuracy, recoil,
+## muzzle velocity (barrel length), loudness (suppressor), muzzle flash, gunshot
+## sound and the weapon light all come from WeaponDB.stats(). bind() swaps guns;
+## refresh() re-reads stats and rebuilds the part models after modding.
+## The animation (slide, hammer, trigger, magazine) is the 1911 model's for now.
 ##
 ## - Semi-auto: one shot per trigger press. Last shot locks the slide back.
 ## - Magazines hold one ammo type. D-pad left/right picks the load for your NEXT
@@ -13,12 +18,8 @@ extends Node
 signal changed
 signal shot_fired(ammo: AmmoType)
 
-const CALIBER := ".45 ACP"
-const CAPACITY := 7
-const MECH_ACCURACY_MOA := 3.0      ## Typical service 1911 from a rest.
 const ZERO_DISTANCE := 22.86        ## 25 yards.
 const ZERO_AMMO := "45_1_fmj230"
-const VELOCITY_FACTOR := 1.0        ## 5" barrel = the ammo data's reference barrel.
 const MIN_SHOT_INTERVAL := 0.09
 const RELOAD_TIME := 1.7
 const RELOAD_EMPTY_TIME := 2.2
@@ -31,10 +32,21 @@ const MAX_CASINGS := 15
 var player: Player
 var ammo_types: Array[AmmoType] = []
 var selected := 0                    ## Preferred load: reloads pick a magazine of this type first.
-var chambered: AmmoType
+var gun: InvItem                     ## The weapon item in your holster (null = none).
+var stats := {}                      ## WeaponDB.stats(gun)
+var light_on := false
+var chambered: AmmoType:
+	get: return gun.wpn_chamber if gun else null
+	set(v):
+		if gun:
+			gun.wpn_chamber = v
 ## The magazine in the gun is a real inventory item: reloads swap it with one from
 ## your rig or pockets (never the backpack), and the old one goes back where the new one was.
-var mag_item: InvItem
+var mag_item: InvItem:
+	get: return gun.wpn_mag if gun else null
+	set(v):
+		if gun:
+			gun.wpn_mag = v
 var mag_ammo: AmmoType:
 	get: return mag_item.mag_ammo if mag_item else null
 	set(v):
@@ -51,7 +63,6 @@ var notice := ""
 var notice_time := 0.0
 var _incoming: Dictionary = {}       ## {item, grid, pos} chosen when the reload starts
 var _outgoing: InvItem
-const WEIGHT_KG := 1.1               ## 1911 without magazine.
 var slide_locked := false
 var hammer_down := false
 var reloading := false
@@ -76,10 +87,8 @@ var _flash_tex: ImageTexture
 
 
 func _ready() -> void:
-	ammo_types = AmmoDB.all_for(CALIBER)
-	mag_item = InvItem.magazine(ammo_types[0], CAPACITY)
-	chambered = ammo_types[0]
-	for key in ["shot_45", "dry_fire", "mag_out", "mag_in", "slide_release", "casing"]:
+	ammo_types = AmmoDB.all_for(".45 ACP")
+	for key in ["shot_45", "shot_45_supp", "dry_fire", "mag_out", "mag_in", "slide_release", "casing"]:
 		var path := "res://assets/audio/%s.wav" % key
 		if ResourceLoader.exists(path):
 			_streams[key] = load(path)
@@ -130,7 +139,10 @@ func register_weapon(root: Node3D, layer: int) -> void:
 		flash.position = Vector3(0, 0, -0.03)
 	d.flash = flash
 	d.light = light
+	d.layer = layer
+	d.beam = null
 	_parts.append(d)
+	_assemble(d)
 
 
 func current_ammo_name() -> String:
@@ -141,14 +153,55 @@ func next_ammo() -> AmmoType:
 	return ammo_types[selected]
 
 
-## Gun + magazine + chambered round.
+## Put a gun in your hand (or null). Stops any reload.
+func bind(item: InvItem) -> void:
+	gun = item
+	reloading = false
+	slide_locked = gun != null and gun.wpn_chamber == null and (gun.wpn_mag == null or gun.wpn_mag.mag_count == 0)
+	hammer_down = false
+	refresh()
+
+
+## Re-read stats and rebuild part models (after modding the gun).
+func refresh() -> void:
+	stats = WeaponDB.stats(gun) if gun else {}
+	if gun and stats.caliber != "":
+		ammo_types = AmmoDB.all_for(stats.caliber)
+		selected = clampi(selected, 0, ammo_types.size() - 1)
+	for d in _parts:
+		_assemble(d)
+	changed.emit()
+
+
+func _assemble(d: Dictionary) -> void:
+	if gun == null:
+		return
+	var built := WeaponDB.assemble(gun, d.root, d.layer)
+	var muzzle: Node3D = built.muzzle
+	if muzzle and muzzle != d.muzzle:
+		d.flash.reparent(muzzle, false)
+		d.light.reparent(muzzle, false)
+		d.muzzle = muzzle
+	d.beam = built.light
+
+
+func velocity_factor() -> float:
+	return WeaponDB.velocity_factor(stats.get("barrel_in", 5.0))
+
+
+func has_light() -> bool:
+	return not stats.get("light", {}).is_empty()
+
+
+func toggle_light() -> void:
+	if has_light():
+		light_on = not light_on
+		_play("dry_fire")
+
+
+## The gun's weight is counted with your equipment now (Equipment.weapons).
 func carried_weight() -> float:
-	var kg := WEIGHT_KG
-	if mag_item:
-		kg += mag_item.weight()
-	if chambered:
-		kg += ItemDB.round_weight(chambered)
-	return kg
+	return 0.0
 
 
 ## Loaded magazines you can reach for (rig and pockets).
@@ -157,7 +210,7 @@ func spare_mags() -> Array:
 	for grid: InvGrid in player.character.equipment.grids(false):
 		for e in grid.entries:
 			var it: InvItem = e.item
-			if it.def.is_mag() and it.def.caliber == CALIBER and it.mag_count > 0:
+			if it.def.is_mag() and gun and WeaponDB.accepts(gun, "magazine", it) and it.mag_count > 0:
 				out.append({item = it, grid = grid, pos = e.pos})
 	return out
 
@@ -235,6 +288,12 @@ func _try_fire(now: float) -> void:
 		return
 	if player.sprinting:
 		return
+	if gun == null:
+		return
+	if not stats.working:
+		_play("dry_fire")
+		_notify("It won't fire: no %s." % ", ".join(stats.missing))
+		return
 	if chambered == null or slide_locked or hammer_down:
 		_play("dry_fire")
 		hammer_down = true
@@ -268,7 +327,7 @@ func _shoot(ammo: AmmoType) -> void:
 		# the barrel's upward angle that makes the zero load cross there.
 		var target := cam_pos + fwd * ZERO_DISTANCE
 		dir = (target - origin).normalized()
-		var zero_v := AmmoDB.get_ammo(ZERO_AMMO).muzzle_ms() * VELOCITY_FACTOR
+		var zero_v := AmmoDB.get_ammo(ZERO_AMMO).muzzle_ms() * velocity_factor()
 		var zero_angle := 0.5 * Ballistics.GRAVITY * ZERO_DISTANCE / (zero_v * zero_v)
 		dir = dir.rotated(cam.global_transform.basis.x, zero_angle)
 	else:
@@ -278,19 +337,19 @@ func _shoot(ammo: AmmoType) -> void:
 		var target: Vector3 = hit.position if not hit.is_empty() else cam_pos + fwd * 300.0
 		dir = (target - origin).normalized()
 	dir = _apply_spread(dir)
-	Ballistics.fire(origin, dir, ammo, player.get_rid(), VELOCITY_FACTOR, player.hitbox_rids())
+	Ballistics.fire(origin, dir, ammo, player.get_rid(), velocity_factor(), player.hitbox_rids(), stats.loudness)
 
 	# Recoil from the bullet's momentum (+P loads kick harder).
-	var momentum := ammo.mass_kg() * ammo.muzzle_ms() * VELOCITY_FACTOR
-	var kick := momentum * 0.72 * (1.12 if ammo.plus_p else 1.0)
+	var momentum := ammo.mass_kg() * ammo.muzzle_ms() * velocity_factor()
+	var kick := momentum * 0.72 * (1.12 if ammo.plus_p else 1.0) * float(stats.recoil)
 	player.add_recoil(kick, randf_range(-0.3, 0.3) * kick)
-	player.viewmodel.kick(momentum / 3.8)
-	bloom = minf(bloom + 0.45, 2.0)
-	_play("shot_45")
+	player.viewmodel.kick(momentum / 3.8 * float(stats.recoil))
+	bloom = minf(bloom + 0.45 * float(stats.recoil), 2.0)
+	_play(String(stats.sound) if stats.sound != "" else "shot_45")
 
 
 func spread_degrees() -> float:
-	var s := MECH_ACCURACY_MOA / 60.0 * 0.5
+	var s := float(stats.get("moa", 3.0)) / 60.0 * 0.5
 	if player.aiming:
 		s += 0.12
 	else:
@@ -324,7 +383,7 @@ func _cycle_preferred(step: int) -> void:
 
 
 func _start_reload() -> void:
-	if reloading:
+	if reloading or gun == null:
 		return
 	var best := _best_mag()
 	if best.is_empty():
@@ -395,8 +454,8 @@ func _mag_check() -> void:
 	var ammo_name := mag_ammo.display_name if has_mag else ""
 	var desc := "empty"
 	if has_mag:
-		if mag_count >= CAPACITY:
-			desc = "full (7)"
+		if mag_count >= mag_item.def.mag_capacity:
+			desc = "full (%d)" % mag_count
 		elif mag_count >= 5:
 			desc = "most of it (%d)" % mag_count
 		elif mag_count >= 3:
@@ -460,9 +519,11 @@ func _animate(delta: float) -> void:
 		if d.magazine:
 			d.magazine.position = d.mag_rest + GRIP_AXIS * mag_off
 			d.magazine.visible = mag_visible and (has_mag or mag_off > 0.0)
-		var flashing := _flash_time > 0.0 and d == active
+		var flashing: bool = _flash_time > 0.0 and d == active and stats.get("flash", true)
 		d.flash.visible = flashing
 		d.light.visible = flashing
+		if d.get("beam"):
+			(d.beam as Node3D).visible = light_on and d == active
 		if d.flash.visible:
 			d.flash.rotation.z = randf() * TAU
 			d.flash.scale = Vector3.ONE * randf_range(0.8, 1.3)

@@ -303,6 +303,13 @@ func _build_civilians() -> void:
 	_label("LOOT TEST - shoot them, then search the bodies (A)", Vector3(13.9, 2.4, 11.5), 44)
 
 
+func _mag8() -> InvItem:
+	var m := InvItem.create("mag_1911_8")
+	m.mag_ammo = AmmoDB.get_ammo("45_2_jhp230")
+	m.mag_count = 8
+	return m
+
+
 ## Supply crate (A to search) and a mirror (A for a new look) next to spawn.
 func _build_supply() -> void:
 	var crate := LootContainer.new("Supply crate", 12, 14)
@@ -330,6 +337,28 @@ func _build_supply() -> void:
 	for a in AmmoDB.all_for(".45 ACP"):
 		crate.add(InvItem.rounds(a.id, 50))
 		crate.add(InvItem.rounds(a.id, 50))
+	# Gun parts bench: attachments for the 1911, 8-round mags and a spare pistol.
+	var bench := LootContainer.new("Gun parts", 10, 8)
+	bench.position = Vector3(-4.6, 0.45, 17.2)
+	bench.set_meta("material", "wood_crate")
+	var bm := MeshInstance3D.new()
+	var bb := BoxMesh.new()
+	bb.size = Vector3(1.4, 0.9, 0.8)
+	bm.mesh = bb
+	bm.material_override = _checker_material(Color(0.3, 0.3, 0.32), Color(0.26, 0.26, 0.28), 0.25)
+	bench.add_child(bm)
+	var bcs := CollisionShape3D.new()
+	var bshape := BoxShape3D.new()
+	bshape.size = bb.size
+	bcs.shape = bshape
+	bench.add_child(bcs)
+	add_child(bench)
+	_label("GUN PARTS", Vector3(-4.6, 1.3, 17.2), 40)
+	for id in ["barrel_1911_threaded", "supp_45", "rail_1911", "light_m3", "grips_1911_rubber", "sights_1911_night"]:
+		bench.add(InvItem.create(id))
+	for i in 3:
+		bench.add(_mag8())
+	bench.add(InvItem.pistol(AmmoDB.get_ammo("45_1_fmj230"), 7, true))
 	for id in ["gpu", "medkit", "water", "ifak", "painkillers", "painkillers", "beans", "cash", "cash", "cash", "gold", "gold", "docs"]:
 		crate.add(InvItem.create(id))
 

@@ -68,7 +68,8 @@ func _process(_d: float) -> bool:
 		p.knife._rng.seed = 11
 		p.switch_weapon("knife")
 		check(p.active_weapon == "knife" and p.knife.view.visible and not p.viewmodel.visible, "Y swaps the 1911 for the Ka-Bar")
-		check(absf(p.carried_weight() - p.character.equipment.total_weight() - p.firearm.carried_weight() - 0.45) < 0.01, "the knife and sheath add 1 lb to your load")
+		var kb = p.character.equipment.get_weapon("melee")
+		check(kb != null and absf(kb.weight() - 0.45) < 0.01 and p.carried_weight() >= kb.weight(), "the knife and sheath (1 lb) are in your sheath slot and your load")
 		# Strip npc 1's top so the stab meets skin.
 		for s in ["torso_inner", "torso_outer", "vest"]:
 			npcs[1].model.equipment.unequip(s)

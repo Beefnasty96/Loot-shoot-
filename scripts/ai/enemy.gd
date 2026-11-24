@@ -41,9 +41,17 @@ var target: Node3D                 ## The player.
 var last_known := Vector3.INF
 var can_see_target := false
 
-var ammo: AmmoType
-var mag := 7
-var chambered := true
+var weapon_item: InvItem           ## The gun/knife item in their holster/sheath (dropped when they die).
+var ammo: AmmoType:                ## What's chambered (or in the mag) right now.
+	get:
+		if weapon_item and weapon_item.wpn_chamber:
+			return weapon_item.wpn_chamber
+		return weapon_item.wpn_mag.mag_ammo if weapon_item and weapon_item.wpn_mag else null
+var mag: int:
+	get: return weapon_item.wpn_mag.mag_count if weapon_item and weapon_item.wpn_mag else 0
+var chambered: bool:
+	get: return weapon_item != null and weapon_item.wpn_chamber != null
+var _stats := {}
 var reloading := 0.0
 var blade := BladeDef.kabar()
 
@@ -105,14 +113,21 @@ func setup(rng: RandomNumberGenerator, with: String, as_role: String) -> void:
 	_hostile_rids = hitbox_rids()
 	if weapon == "pistol":
 		var loads := [AmmoDB.get_ammo("45_1_fmj230"), AmmoDB.get_ammo("45_2_jhp230"), AmmoDB.get_ammo("45_3_jhp185p")]
-		ammo = loads[rng.randi() % loads.size()]
-		mag = 7
-		chambered = true
+		var load_type: AmmoType = loads[rng.randi() % loads.size()]
+		weapon_item = InvItem.pistol(load_type, 7, true)
+		# Some carry a few aftermarket bits.
+		if rng.randf() < 0.25:
+			weapon_item.mods["grips"] = InvItem.create("grips_1911_rubber")
+		if rng.randf() < 0.15:
+			weapon_item.mods["sights"] = InvItem.create("sights_1911_night")
+		model.equipment.arm(weapon_item)
+		_stats = WeaponDB.stats(weapon_item)
 		for i in rng.randi_range(1, 2):            # spare magazines in their pockets (lootable)
-			model.equipment.store(InvItem.magazine(ammo, 7))
-		gun = (load("res://assets/weapons/m1911/m1911.glb") as PackedScene).instantiate()
+			model.equipment.store(InvItem.magazine(load_type, 7))
+		gun = (load(weapon_item.def.scene_path) as PackedScene).instantiate()
 		gun.position = Vector3(0.1, -0.3, -0.42)
 		aim.add_child(gun)
+		WeaponDB.assemble(weapon_item, gun)
 		model.grip_point = _marker(gun, Vector3(0.0, -0.064, 0.057))
 		model.grip_right = _marker(gun, Vector3(0.006, -0.085, 0.125))
 		model.grip_left = _marker(gun, Vector3(-0.035, -0.1, 0.105))
@@ -127,6 +142,8 @@ func setup(rng: RandomNumberGenerator, with: String, as_role: String) -> void:
 		gun.add_child(_flash)
 		_flash.position = Vector3(0, 0.0, -0.25)
 	else:
+		weapon_item = InvItem.create("kabar")
+		model.equipment.arm(weapon_item)
 		gun = (load(blade.scene_path) as PackedScene).instantiate()
 		var holder := Node3D.new()
 		holder.position = Vector3(0.2, -0.5, -0.35)
@@ -275,10 +292,11 @@ func _notice(where: Vector3, amount: float) -> void:
 	_face(where)
 
 
-func _on_gunshot(origin: Vector3, shooter: RID) -> void:
+func _on_gunshot(origin: Vector3, shooter: RID, loudness := 1.0) -> void:
 	if dead or shooter == get_rid():
 		return
-	var d := origin.distance_to(global_position)
+	# A suppressed shot carries a fraction as far (and through fewer walls).
+	var d := origin.distance_to(global_position) / maxf(loudness, 0.05)
 	if d > 45.0:
 		return
 	var player_shot := target != null and is_instance_valid(target) and shooter == (target as CollisionObject3D).get_rid()
@@ -439,16 +457,20 @@ func _fire(aim_at: Vector3) -> void:
 	var err := deg_to_rad(aim_error_deg())
 	var axis := dir.cross(Vector3.UP).normalized().rotated(dir, _rng.randf() * TAU)
 	dir = dir.rotated(axis, absf(_rng.randfn(0.0, err)))
-	Ballistics.fire(origin, dir, ammo, get_rid(), 0.95, _hostile_rids)
+	var shot_ammo := ammo
+	Ballistics.fire(origin, dir, shot_ammo, get_rid(), WeaponDB.velocity_factor(_stats.get("barrel_in", 5.0)), _hostile_rids, _stats.get("loudness", 1.0))
 	if _audio.stream:
 		_audio.pitch_scale = _rng.randf_range(0.96, 1.04)
 		_audio.play()
 	if _flash:
 		_flash.light_energy = 3.0
-	if mag > 0:
-		mag -= 1
+	# Cycle: next round up from the magazine, or the slide locks back empty.
+	var m: InvItem = weapon_item.wpn_mag
+	if m and m.mag_count > 0:
+		weapon_item.wpn_chamber = m.mag_ammo
+		m.mag_count -= 1
 	else:
-		chambered = false
+		weapon_item.wpn_chamber = null
 
 
 func _start_reload() -> void:
@@ -458,15 +480,14 @@ func _start_reload() -> void:
 	for g: InvGrid in model.equipment.grids(true):
 		for e: Dictionary in g.entries:
 			var it: InvItem = e.item
-			if it.def.id == "mag_1911" and it.mag_count > 0:
+			if it.def.is_mag() and WeaponDB.accepts(weapon_item, "magazine", it) and it.mag_count > 0:
 				reloading = 2.3
 				set_meta("next_mag", it)
 				set_meta("next_grid", g)
 				if role == "holder" or _rng.randf() < 0.6:
 					_set_state(State.COVER)
 				return
-	# Out of ammo: switch to "pusher" with nothing; just hold (could flee later).
-	chambered = false
+	# Out of ammo: nothing to reload with; they just hold (could flee later).
 
 
 func _finish_reload() -> void:
@@ -474,10 +495,15 @@ func _finish_reload() -> void:
 	var g: InvGrid = get_meta("next_grid", null)
 	if it == null or g == null:
 		return
+	var pos := g.pos_of(it)
 	g.remove(it)
-	mag = it.mag_count - 1
-	chambered = true
-	ammo = it.mag_ammo
+	var old: InvItem = weapon_item.wpn_mag
+	weapon_item.wpn_mag = it
+	if old and not g.place(old, pos):      # the empty goes back in the pocket
+		g.auto_place(old)
+	if weapon_item.wpn_chamber == null and it.mag_count > 0:
+		weapon_item.wpn_chamber = it.mag_ammo
+		it.mag_count -= 1
 	_burst = 0
 
 
@@ -645,26 +671,16 @@ func die(impulse := Vector3.ZERO, at := Vector3.ZERO, bone := "") -> void:
 	_drop_weapon()
 
 
-## The weapon falls out of their hand.
+## The weapon falls out of their hand and lands on the floor nearby, where it can be picked up
+## (the actual gun item: its magazine, chambered round and parts).
 func _drop_weapon() -> void:
 	if gun == null or not is_instance_valid(gun):
 		return
-	var xf := gun.global_transform
-	var rb := RigidBody3D.new()
-	rb.collision_layer = 8
-	rb.collision_mask = 1
-	rb.mass = 1.1 if weapon == "pistol" else 0.3
-	var cs := CollisionShape3D.new()
-	var bs := BoxShape3D.new()
-	bs.size = Vector3(0.04, 0.14, 0.22) if weapon == "pistol" else Vector3(0.04, 0.3, 0.06)
-	cs.shape = bs
-	rb.add_child(cs)
-	get_parent().add_child(rb)
-	rb.global_transform = xf
-	gun.get_parent().remove_child(gun)
-	rb.add_child(gun)
-	gun.transform = Transform3D.IDENTITY
-	rb.linear_velocity = velocity + Vector3(_rng.randf_range(-0.5, 0.5), 0.5, _rng.randf_range(-0.5, 0.5))
+	var at := gun.global_position + Vector3(_rng.randf_range(-0.3, 0.3), 0.0, _rng.randf_range(-0.3, 0.3))
+	gun.queue_free()
+	if weapon_item:
+		model.equipment.disarm(weapon_item.def.weapon_slot)
+		WorldItem.spawn(weapon_item, at, get_parent())
 	model.grip_point = null
 	model.grip_right = null
 	model.grip_left = null

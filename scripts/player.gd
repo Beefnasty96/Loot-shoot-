@@ -103,6 +103,9 @@ func _build() -> void:
 	pockets[1].place(InvItem.magazine(AmmoDB.get_ammo("45_2_jhp230"), 7), Vector2i.ZERO)
 	pockets[2].place(InvItem.create("painkillers"), Vector2i.ZERO)
 	pockets[3].place(InvItem.create("ifak"), Vector2i.ZERO)
+	# Weapons are items in their own slots: a stock 1911 (loaded, one chambered) and a Ka-Bar.
+	character.equipment.arm(InvItem.pistol(AmmoDB.get_ammo("45_1_fmj230"), 7, true))
+	character.equipment.arm(InvItem.create("kabar"))
 	hitboxes = Npc.build_hitboxes(character, self)
 
 	head = Node3D.new()
@@ -157,6 +160,8 @@ func _build() -> void:
 	knife.player = self
 	add_child(knife)
 	_knife_grip = knife.build(fp_camera, head, Viewmodel.LAYER, PLAYER_MODEL_LAYER)
+	firearm.bind(character.equipment.get_weapon("sidearm"))
+	character.equipment.weapon_changed.connect(_on_weapon_changed)
 
 	vitals = Vitals.new()
 	vitals.player = self
@@ -196,6 +201,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		switch_weapon()
 	elif event.is_action_pressed("use_meds"):
 		_med_note(vitals.use_meds())
+	elif event.is_action_pressed("toggle_light"):
+		_light_hold = 0.0
 	elif event.is_action_pressed("interact"):
 		var target := interact_target()
 		if target and target.has_method("use"):
@@ -207,9 +214,22 @@ func carried_weight() -> float:
 	var kg := character.equipment.total_weight()
 	if firearm:
 		kg += firearm.carried_weight()
-	if knife:
-		kg += knife.blade.weight_kg
 	return kg
+
+
+var _light_hold := -1.0
+
+
+## Something went into or out of a weapon slot (inventory, pickup, swap).
+func _on_weapon_changed(slot: String) -> void:
+	var eq := character.equipment
+	if slot == "sidearm":
+		firearm.bind(eq.get_weapon("sidearm"))
+	var avail := available_weapons()
+	if active_weapon != "none" and not (active_weapon in avail):
+		_set_weapon(avail[0] if not avail.is_empty() else "none")
+	elif active_weapon == "none" and not avail.is_empty():
+		_set_weapon(avail[0])
 
 
 ## Free to shoot/swing: not in a menu, not treating yourself, not dead.
@@ -253,17 +273,43 @@ func _on_died(cause: String) -> void:
 
 
 ## Pistol <-> Ka-Bar (Y). Not mid-reload or mid-swing.
+## What you can draw: "pistol" (something in the holster), "knife" (something in the sheath).
+## Primary long guns slot in here when they arrive.
+func available_weapons() -> Array[String]:
+	var out: Array[String] = []
+	var eq := character.equipment
+	if eq.get_weapon("sidearm"):
+		out.append("pistol")
+	if eq.get_weapon("melee"):
+		out.append("knife")
+	return out
+
+
 func switch_weapon(to := "") -> void:
+	var avail := available_weapons()
 	if to == "":
-		to = "knife" if active_weapon == "pistol" else "pistol"
+		if avail.is_empty():
+			to = "none"
+		else:
+			var i := avail.find(active_weapon)
+			to = avail[(i + 1) % avail.size()]
+	elif to != "none" and not (to in avail):
+		return
 	if to == active_weapon or (firearm and firearm.reloading) or (knife and knife.busy() and knife.phase != Knife.Phase.DRAW):
 		return
+	_set_weapon(to)
+
+
+func _set_weapon(to: String) -> void:
 	active_weapon = to
 	var pistol := to == "pistol"
 	viewmodel.visible = pistol
 	_tp_weapon.visible = pistol
-	knife.set_active(not pistol)
-	if pistol:
+	if knife.active != (to == "knife"):
+		knife.set_active(to == "knife")
+	if to == "none":
+		character.pose_mode = CharacterModel.PoseMode.IDLE
+	elif pistol:
 		character.pose_mode = CharacterModel.PoseMode.PISTOL
 		character.grip_point = _pistol_grips[0]
 		character.grip_right = _pistol_grips[1]
@@ -324,6 +370,20 @@ func _process(delta: float) -> void:
 		var p := vitals.felt_pain()
 		_turn(sin(Time.get_ticks_msec() * 0.011) * p * 3.0 * delta, cos(Time.get_ticks_msec() * 0.007) * p * 2.0 * delta)
 	med_notice_time = maxf(0.0, med_notice_time - delta)
+	# D-pad down: tap = weapon light, hold = bullet paths + ballistics readout.
+	if _light_hold >= 0.0:
+		if Input.is_action_pressed("toggle_light"):
+			_light_hold += delta
+			if _light_hold >= 0.6:
+				Ballistics.debug_enabled = not Ballistics.debug_enabled
+				_light_hold = -1.0
+		else:
+			if active_weapon == "pistol" and not ui_locked:
+				if firearm.has_light():
+					firearm.toggle_light()
+				else:
+					_med_note("No light on this gun")
+			_light_hold = -1.0
 
 	if _recoil_recover > 0.0:
 		var settle := minf(_recoil_recover, delta * 14.0)
