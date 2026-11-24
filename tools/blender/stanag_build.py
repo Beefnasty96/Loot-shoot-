@@ -6,7 +6,8 @@ it in the magazine well, where the source model's magazine was):
 - 0.88 in (22.4 mm) wide, 0.95 in over the stiffening ribs,
 - 2.5 in (63 mm) front to back,
 - straight for the top ~2.8 in (the part that sits in the well), then one smooth
-  gentle forward arc (14 degrees), so the base sits ~0.7 in ahead of the top,
+  forward arc (20 degrees), so the base sits ~0.9 in ahead of the top and its
+  bottom edge slopes up toward the front (it's square to the curved body),
 - four stiffening ribs down each side (one at the front, one mid, a close pair at the
   rear), a thin flush floorplate with a small front lip, a tan anti-tilt follower and
   the top round (staggered left).
@@ -29,7 +30,7 @@ WIDTH = 22.4
 DEPTH = 63.0
 TOP_STRAIGHT = 72.0      # mm of straight body below the lips: the part that sits in the well
 CURVE_LEN = 92.0        # mm of curved body below that: one smooth arc
-CURVE_DEG = 14.0         # gentle: the part below the well leans forward ~7 degrees on average
+CURVE_DEG = 20.0         # the part below the well leans forward ~10 degrees on average
 FLOOR_T = 4.0            # thin floorplate, nearly flush with the body
 ## Stiffening ribs, as on a USGI 30-rounder (front to back): (centre as a fraction of the
 ## depth from the front, width mm, mm below the lips where it starts). The front rib starts
@@ -76,7 +77,7 @@ def _spine(n_curve=10):
 
 def _ring(y, z, a, hw, hd, ch):
     """Chamfered rectangle across the body at a spine point, tilted by the curve angle."""
-    fwd = Vector((0.0, math.cos(a), -math.sin(a)))   # across the body, toward the front
+    fwd = Vector((0.0, math.cos(a), math.sin(a)))   # across the body, toward the front (square to the curved spine)
     out = []
     for px, pd in [(-hw + ch, -hd), (hw - ch, -hd), (hw, -hd + ch), (hw, hd - ch), (hw - ch, hd), (-hw + ch, hd), (-hw, hd - ch), (-hw, -hd + ch)]:
         p = Vector((px, y, z)) + fwd * pd
@@ -111,8 +112,8 @@ def _loft(name, rings, mat):
 
 def _box(name, c, size, mat, a=0.0):
     """Box centred at c (mm), size (x, across-depth, height), tilted forward by angle a."""
-    fwd = Vector((0.0, math.cos(a), -math.sin(a)))
-    up = Vector((0.0, math.sin(a), math.cos(a)))
+    fwd = Vector((0.0, math.cos(a), math.sin(a)))
+    up = Vector((0.0, -math.sin(a), math.cos(a)))
     sx, sd, sh = size[0] / 2, size[1] / 2, size[2] / 2
     verts = []
     for dz in (-sh, sh):
@@ -164,7 +165,7 @@ def build_stanag(tex_dir):
             for (y, z, a) in spine:
                 if z > -start:
                     continue
-                fwd = Vector((0.0, math.cos(a), -math.sin(a)))
+                fwd = Vector((0.0, math.cos(a), math.sin(a)))
                 base = Vector((side * hw, y, z)) + fwd * dd
                 rr.append([base + fwd * (-w / 2), base + fwd * (w / 2),
                            base + Vector((side * 1.3, 0, 0)) + fwd * (w / 2 - 0.8), base + Vector((side * 1.3, 0, 0)) + fwd * (-w / 2 + 0.8)])
@@ -174,13 +175,13 @@ def build_stanag(tex_dir):
             # Stop a little above the floorplate.
             last = rr[-1]
             ya, za, aa = spine[-1]
-            back = Vector((0.0, math.sin(aa), math.cos(aa))) * 6.0
+            back = Vector((0.0, -math.sin(aa), math.cos(aa))) * 6.0
             rr[-1] = [v + back for v in last]
             parts.append(_loft(f"Rib{side}_{frac}", rr, body_m))
     # Floorplate: thin, just proud of the body, with a small lip at the front.
     yb, zb, ab = spine[-1]
-    up = Vector((0.0, math.sin(ab), math.cos(ab)))
-    fwd = Vector((0.0, math.cos(ab), -math.sin(ab)))
+    up = Vector((0.0, -math.sin(ab), math.cos(ab)))
+    fwd = Vector((0.0, math.cos(ab), math.sin(ab)))
     c = Vector((0.0, yb, zb)) - up * (FLOOR_T / 2 - 0.5)
     parts.append(_box("Floorplate", c, (WIDTH + 1.6, DEPTH + 1.6, FLOOR_T), floor_m, ab))
     parts.append(_box("FloorLip", c + fwd * (hd + 1.6), (WIDTH - 4.0, 2.0, FLOOR_T), floor_m, ab))
