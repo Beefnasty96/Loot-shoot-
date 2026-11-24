@@ -172,7 +172,7 @@ func busy() -> bool:
 func _process(delta: float) -> void:
 	if not active:
 		return
-	if not player.ui_locked and Input.is_action_just_pressed("fire"):
+	if player.can_act() and Input.is_action_just_pressed("fire"):
 		var want := Attack.STAB if Input.is_action_pressed("aim") else (Attack.SLASH_B if _next_back else Attack.SLASH_F)
 		if phase == Phase.IDLE:
 			_begin(want)
@@ -265,7 +265,9 @@ func _sweep() -> void:
 		rays.append([from - up, from - up + d * reach])
 	var travel := (d - _prev_dir).normalized() if attack != Attack.STAB else d
 	_prev_dir = d
-	var hit := Melee.sweep(player.get_world_3d().direct_space_state, rays, [player.get_rid()])
+	var ex: Array[RID] = [player.get_rid()]
+	ex.append_array(player.hitbox_rids())
+	var hit := Melee.sweep(player.get_world_3d().direct_space_state, rays, ex)
 	if hit.is_empty():
 		return
 	_connected = true

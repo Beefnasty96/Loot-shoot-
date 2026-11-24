@@ -37,6 +37,7 @@ func _enter_tree() -> void:
 	_button("ammo_next", JOY_BUTTON_DPAD_RIGHT, [KEY_BRACKETRIGHT])  # load for the next magazine
 	_button("ammo_prev", JOY_BUTTON_DPAD_LEFT, [KEY_BRACKETLEFT])
 	_button("toggle_debug", JOY_BUTTON_DPAD_DOWN, [KEY_F3])          # bullet paths + hit readout
+	_button("use_meds", JOY_BUTTON_DPAD_UP, [KEY_H])                 # treat yourself with what you carry
 
 
 func _ensure(action: String) -> void:

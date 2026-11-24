@@ -53,6 +53,14 @@ var tp_camera: Camera3D
 var viewmodel: Viewmodel
 var firearm: Firearm
 var knife: Knife
+var vitals: Vitals
+var hitboxes: Array[Hitbox] = []
+var model: CharacterModel:     ## Same as `character` (Melee and others look for `model`).
+	get:
+		return character
+var med_notice := ""
+var med_notice_time := 0.0
+signal player_died(cause: String)
 var active_weapon := "pistol"   ## "pistol" or "knife"; Y switches.
 var _pistol_grips: Array[Node3D] = []
 var _knife_grip: Node3D
@@ -61,6 +69,7 @@ var _recoil_recover := 0.0  ## Degrees of muzzle climb still to settle.
 
 
 func _ready() -> void:
+	add_to_group("player")
 	_build()
 	_apply_view()
 
@@ -69,7 +78,7 @@ func _ready() -> void:
 
 func _build() -> void:
 	collision_layer = 2  # characters; the world stays on layer 1
-	collision_mask = 1
+	collision_mask = 1 | 2 | 32   # world, people, doors
 	_shape = CapsuleShape3D.new()
 	_shape.radius = RADIUS
 	_shape.height = STAND_HEIGHT
@@ -93,6 +102,8 @@ func _build() -> void:
 	pockets[0].place(InvItem.magazine(AmmoDB.get_ammo("45_1_fmj230"), 7), Vector2i.ZERO)
 	pockets[1].place(InvItem.magazine(AmmoDB.get_ammo("45_2_jhp230"), 7), Vector2i.ZERO)
 	pockets[2].place(InvItem.create("painkillers"), Vector2i.ZERO)
+	pockets[3].place(InvItem.create("ifak"), Vector2i.ZERO)
+	hitboxes = Npc.build_hitboxes(character, self)
 
 	head = Node3D.new()
 	head.position.y = EYE_STAND
@@ -147,6 +158,12 @@ func _build() -> void:
 	add_child(knife)
 	_knife_grip = knife.build(fp_camera, head, Viewmodel.LAYER, PLAYER_MODEL_LAYER)
 
+	vitals = Vitals.new()
+	vitals.player = self
+	add_child(vitals)
+	vitals.died.connect(_on_died)
+	vitals.treated.connect(func(t): _med_note(t))
+
 
 # ---------------------------------------------------------------- input
 
@@ -177,6 +194,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_crouch(not crouching)
 	elif event.is_action_pressed("switch_weapon"):
 		switch_weapon()
+	elif event.is_action_pressed("use_meds"):
+		_med_note(vitals.use_meds())
 	elif event.is_action_pressed("interact"):
 		var target := interact_target()
 		if target and target.has_method("use"):
@@ -191,6 +210,46 @@ func carried_weight() -> float:
 	if knife:
 		kg += knife.blade.weight_kg
 	return kg
+
+
+## Free to shoot/swing: not in a menu, not treating yourself, not dead.
+func can_act() -> bool:
+	return not ui_locked and vitals != null and vitals.using == "" and not vitals.dead
+
+
+func hitbox_rids() -> Array[RID]:
+	var out: Array[RID] = []
+	for hb in hitboxes:
+		out.append(hb.get_rid())
+	return out
+
+
+## Hit by a bullet or a blade (hitboxes on your body report here).
+func take_hit(info: Dictionary) -> void:
+	vitals.take_hit(info)
+	# The hit jolts your view.
+	var k := clampf(info.damage / 25.0, 0.3, 1.5)
+	_turn(randf_range(-2.0, 2.0) * k, randf_range(1.0, 3.0) * k)
+
+
+func _med_note(text: String) -> void:
+	if text == "":
+		return
+	med_notice = text
+	med_notice_time = 2.5
+
+
+func _on_died(cause: String) -> void:
+	ui_locked = true
+	sprinting = false
+	aiming = false
+	viewmodel.visible = false
+	knife.view.visible = false
+	character.start_ragdoll(Vector3.ZERO, Vector3.ZERO, "")
+	view = View.THIRD
+	pitch = -55.0
+	_apply_view()
+	player_died.emit(cause)
 
 
 ## Pistol <-> Ka-Bar (Y). Not mid-reload or mid-swing.
@@ -260,6 +319,12 @@ func _process(delta: float) -> void:
 		var inv := -1.0 if Settings.invert_look_y else 1.0
 		_turn(-look.x * speed * delta, -look.y * speed * delta * inv)
 
+	# Pain makes it hard to hold your aim still.
+	if vitals and vitals.felt_pain() > 0.2 and not vitals.dead:
+		var p := vitals.felt_pain()
+		_turn(sin(Time.get_ticks_msec() * 0.011) * p * 3.0 * delta, cos(Time.get_ticks_msec() * 0.007) * p * 2.0 * delta)
+	med_notice_time = maxf(0.0, med_notice_time - delta)
+
 	if _recoil_recover > 0.0:
 		var settle := minf(_recoil_recover, delta * 14.0)
 		pitch -= settle
@@ -322,7 +387,7 @@ func _physics_process(delta: float) -> void:
 		sprinting = false
 
 	var kg := carried_weight()
-	if sprinting and not Encumbrance.can_sprint(kg):
+	if sprinting and (not Encumbrance.can_sprint(kg) or not vitals.can_sprint()):
 		sprinting = false
 	var speed := walk_speed
 	if crouching:
@@ -331,7 +396,11 @@ func _physics_process(delta: float) -> void:
 		speed = sprint_speed
 	elif aiming:
 		speed = walk_speed * 0.6
-	speed *= Encumbrance.speed_factor(kg)
+	speed *= Encumbrance.speed_factor(kg) * vitals.speed_factor()
+	if vitals.using != "":
+		speed *= 0.5
+	if vitals.dead:
+		speed = 0.0
 
 	var dir := (transform.basis * Vector3(input.x, 0.0, input.y))
 	var target := dir * speed

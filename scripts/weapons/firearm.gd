@@ -196,7 +196,7 @@ func _process(delta: float) -> void:
 	if mag_check_time > 0.0:
 		mag_check_time -= delta
 
-	if player.ui_locked or player.active_weapon != "pistol":
+	if not player.can_act() or player.active_weapon != "pistol":
 		_animate(delta)
 		return
 	if Input.is_action_just_pressed("fire"):
@@ -278,7 +278,7 @@ func _shoot(ammo: AmmoType) -> void:
 		var target: Vector3 = hit.position if not hit.is_empty() else cam_pos + fwd * 300.0
 		dir = (target - origin).normalized()
 	dir = _apply_spread(dir)
-	Ballistics.fire(origin, dir, ammo, player.get_rid(), VELOCITY_FACTOR)
+	Ballistics.fire(origin, dir, ammo, player.get_rid(), VELOCITY_FACTOR, player.hitbox_rids())
 
 	# Recoil from the bullet's momentum (+P loads kick harder).
 	var momentum := ammo.mass_kg() * ammo.muzzle_ms() * VELOCITY_FACTOR
@@ -299,6 +299,8 @@ func spread_degrees() -> float:
 	s += clampf(speed / 3.2, 0.0, 1.5) * (0.5 if player.aiming else 1.0)
 	if player.crouching:
 		s *= 0.8
+	if player.vitals:
+		s += player.vitals.shake() * 2.5     # hurt arms, pain, blood loss
 	return s + bloom
 
 
