@@ -1,6 +1,7 @@
 extends Node3D
-## Grey-box shooting range, built in code: open yard with cover, a firing lane with
-## distance markers, a two-room building with a roof, and stairs to a platform.
+## Grey-box shooting range, built in code: open yard with cover, a 100 yd range
+## (five lanes: 25 ft, 25 / 50 / 75 / 100 yd) running out of the yard's north-west
+## corner, a two-room building with a roof, and stairs to a platform.
 ## Everything sits on a 1 m checker grid so distances are easy to judge.
 
 const WALL_T := 0.3
@@ -116,7 +117,7 @@ func _build_environment() -> void:
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.55, 0.62, 0.70)
-	env.fog_density = 0.006
+	env.fog_density = 0.004    # thin enough to see the 100 yd target
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -125,17 +126,18 @@ func _build_environment() -> void:
 	sun.rotation_degrees = Vector3(-52, 35, 0)
 	sun.light_energy = 1.1
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 40.0
+	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 
 
 func _build_yard() -> void:
 	# Ground and perimeter.
 	_box(Vector3(48, 1, 48), Vector3(0, -0.5, 0), _mat_floor)
-	_wall_x(-24, -24, 24, 4)
+	_wall_x(-24, LANE_X1, 24, 4)     # north wall, open where the range runs out
 	_wall_x(24, -24, 24, 4)
 	_wall_z(-24, -24, 24, 4)
 	_wall_z(24, -24, 24, 4)
+	_build_range_extension()
 
 	# Cover near spawn: low walls (crouch behind) and crates (stand behind).
 	_box(Vector3(3, 1.0, 0.4), Vector3(-4, 0.5, 13), _mat_cover)
@@ -149,16 +151,39 @@ func _build_yard() -> void:
 	_label("SPAWN", Vector3(0, 2.5, 21), 72)
 
 
+## The range: a strip x LANE_X0..LANE_X1 from the yard out to a berm past 100 yd.
+const LANE_X0 := -24.0
+const LANE_X1 := -13.0
+const FIRING_LINE_Z := 18.0
+const RANGE_END_Z := -84.0
+## Lanes from the yard side out: [x, distance label, metres from the line].
+const LANES := [
+	[-14.0, "25 ft", 7.62], [-16.0, "25 yd", 22.86], [-18.0, "50 yd", 45.72], [-20.0, "75 yd", 68.58], [-22.0, "100 yd", 91.44],
+]
+
+
+func _build_range_extension() -> void:
+	# Ground and walls for the part of the range beyond the yard.
+	var length_m := -24.0 - RANGE_END_Z
+	var mid := (-24.0 + RANGE_END_Z) / 2.0
+	_box(Vector3(LANE_X1 - LANE_X0, 1, length_m), Vector3((LANE_X0 + LANE_X1) / 2.0, -0.5, mid), _mat_floor)
+	_wall_z(LANE_X0, RANGE_END_Z, -24, 4)
+	_wall_z(LANE_X1, RANGE_END_Z, -24, 4)
+	# Backstop berm (tall, so high shots don't leave the range).
+	_box(Vector3(LANE_X1 - LANE_X0, 8, 2.0), Vector3((LANE_X0 + LANE_X1) / 2.0, 4.0, RANGE_END_Z + 1.0), _mat_cover, Vector3.ZERO, "concrete")
+
+
 func _build_lane() -> void:
-	# Firing lane down the west side: posts at 25 / 50 / 75 ft from the line at z = 18.
-	_box(Vector3(6, 0.05, 0.2), Vector3(-14, 0.03, 18), _mat_accent)  # firing line
-	_label("FIRING LINE", Vector3(-14, 1.2, 18.5), 64)
-	for ft: int in [25, 50, 75]:
-		var z: float = 18.0 - ft * Units.FT_TO_M
-		_box(Vector3(0.25, 2.0, 0.25), Vector3(-17, 1.0, z), _mat_accent)
-		_label("%d ft" % ft, Vector3(-17, 2.5, z))
-	# Backstop.
-	_box(Vector3(8, 3, 0.6), Vector3(-14, 1.5, -15), _mat_wall)
+	# Five lanes from one firing line: a post and a sign beside each target.
+	_box(Vector3(LANE_X1 - LANE_X0 - 1.0, 0.05, 0.2), Vector3((LANE_X0 + LANE_X1) / 2.0, 0.03, FIRING_LINE_Z), _mat_accent)
+	_label("FIRING LINE - 100 YD RANGE", Vector3((LANE_X0 + LANE_X1) / 2.0, 3.4, FIRING_LINE_Z - 1.5), 48)
+	for lane: Array in LANES:
+		var x: float = lane[0]
+		var z: float = FIRING_LINE_Z - float(lane[2])
+		_box(Vector3(0.08, 0.05, 0.4), Vector3(x, 0.03, FIRING_LINE_Z - 0.3), _mat_accent)   # lane mark on the line
+		_label(lane[1], Vector3(x, 0.35, FIRING_LINE_Z - 1.2), 24)
+		_box(Vector3(0.2, 2.0, 0.2), Vector3(x + 0.75, 1.0, z), _mat_accent)
+		_label(lane[1], Vector3(x + 0.75, 2.4, z), int(clampf(48.0 + float(lane[2]) * 2.2, 48.0, 260.0)))
 
 
 func _build_house() -> void:
@@ -277,10 +302,10 @@ func _build_barriers() -> void:
 
 
 func _build_dummies() -> void:
-	# Firing lane: 25 / 50 / 75 ft.
-	for ft: int in [25, 50, 75]:
+	# One target per lane: 25 ft, 25 / 50 / 75 / 100 yd.
+	for lane: Array in LANES:
 		var dummy := TargetDummy.new()
-		dummy.position = Vector3(-14.0, 0.0, 18.0 - ft * Units.FT_TO_M)
+		dummy.position = Vector3(lane[0], 0.0, FIRING_LINE_Z - float(lane[2]))
 		add_child(dummy)
 	# Inside the house, behind the drywall partition: shoot it from the front room.
 	var hidden := TargetDummy.new()
@@ -312,7 +337,7 @@ func _mag8() -> InvItem:
 
 ## Supply crate (A to search) and a mirror (A for a new look) next to spawn.
 func _build_supply() -> void:
-	var crate := LootContainer.new("Supply crate", 12, 14)
+	var crate := LootContainer.new("Supply crate", 14, 16)
 	crate.position = Vector3(-2.6, 0.45, 17.2)
 	crate.set_meta("material", "wood_crate")
 	var mesh := MeshInstance3D.new()
@@ -337,8 +362,16 @@ func _build_supply() -> void:
 	for a in AmmoDB.all_for(".45 ACP"):
 		crate.add(InvItem.rounds(a.id, 50))
 		crate.add(InvItem.rounds(a.id, 50))
+	# 5.56 for the M4: two loaded 30-rounders of each load, empties, and loose rounds.
+	for a in AmmoDB.all_for("5.56 NATO"):
+		for i in 2:
+			crate.add(InvItem.magazine(a, 30, "mag_stanag"))
+	for i in 2:
+		crate.add(InvItem.magazine(null, 0, "mag_stanag"))
+	for a in AmmoDB.all_for("5.56 NATO"):
+		crate.add(InvItem.rounds(a.id, 50))
 	# Gun parts bench: attachments for the 1911, 8-round mags and a spare pistol.
-	var bench := LootContainer.new("Gun parts", 10, 8)
+	var bench := LootContainer.new("Gun parts", 10, 10)
 	bench.position = Vector3(-4.6, 0.45, 17.2)
 	bench.set_meta("material", "wood_crate")
 	var bm := MeshInstance3D.new()
@@ -359,6 +392,7 @@ func _build_supply() -> void:
 	for i in 3:
 		bench.add(_mag8())
 	bench.add(InvItem.pistol(AmmoDB.get_ammo("45_1_fmj230"), 7, true))
+	bench.add(InvItem.rifle(AmmoDB.get_ammo("556_2_m855"), 30, false))
 	for id in ["gpu", "medkit", "water", "ifak", "painkillers", "painkillers", "beans", "cash", "cash", "cash", "gold", "gold", "docs"]:
 		crate.add(InvItem.create(id))
 

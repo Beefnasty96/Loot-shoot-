@@ -1,21 +1,20 @@
 class_name Viewmodel
 extends Node3D
-## First-person arms + weapon, parented to the first-person camera.
-## Handles hip/aim/sprint poses, look sway, walk bob, and pulling the gun back
-## when you stand close to a wall (so it never pokes through geometry).
+## First-person arms + weapon, parented to the first-person camera. One per gun
+## slot (the Firearm that runs it builds it); poses come from the gun's rig.view
+## (WeaponDB): hip/aim/sprint, look sway, walk bob, recoil, reload tilt, and
+## pulling the gun back when you stand close to a wall.
 
 const LAYER := 4                      ## Render layer 3: seen only by the first-person camera.
-const HIP_POS := Vector3(0.072, -0.06, -0.215)
-const HIP_ROT := Vector3(2.0, 4.0, -3.0)    ## Degrees: angled slightly toward the crosshair.
-const AIM_POS := Vector3(0.0, -0.0202, -0.40)  ## Puts the sight line on the eye.
-const SPRINT_POS := Vector3(0.05, -0.15, -0.21)
-const SPRINT_ROT := Vector3(-38.0, 22.0, 12.0) ## Degrees: muzzle down and inward.
 const WALL_CHECK := 0.6               ## Metres ahead of the eye to look for walls.
 
-@export var weapon_scene: PackedScene = preload("res://assets/weapons/m1911/m1911.glb")
-@export var arms_scene: PackedScene = preload("res://assets/viewmodels/arms/arms.glb")
+var weapon_scene: PackedScene = preload("res://assets/weapons/m1911/m1911.glb")
+var arms_scene: PackedScene = preload("res://assets/viewmodels/arms/arms.glb")
+## Poses (WeaponDB.RIG_DEFAULTS.view): hip, hip_rot, aim (puts the sight line on the eye), sprint, sprint_rot, ...
+var pose: Dictionary = WeaponDB.RIG_DEFAULTS.view
 
 var player: Player
+var firearm: Firearm
 var weapon: Node3D
 var arms: Node3D
 
@@ -36,7 +35,7 @@ func _ready() -> void:
 	add_child(weapon)
 	add_child(arms)
 	_prepare(self)
-	position = HIP_POS
+	position = pose.hip
 	if player:
 		_last_yaw = player.rotation.y
 		_last_pitch = player.pitch
@@ -51,12 +50,12 @@ func _prepare(node: Node) -> void:
 
 
 func _process(delta: float) -> void:
-	if player == null:
+	if player == null or not visible:
 		return
 
 	# Smoothly blend between poses.
 	# Aim speed from the gun's ergonomics (grips, sights, a heavy can on the front).
-	var st: Dictionary = player.firearm.stats if player.firearm else {}
+	var st: Dictionary = firearm.stats if firearm else {}
 	var aim_rate := 6.0 * (0.6 + float(st.get("ergo", 60.0)) / 100.0 * 0.7) * float(st.get("ads", 1.0))
 	_aim = move_toward(_aim, 1.0 if player.aiming else 0.0, delta * aim_rate)
 	_sprint = move_toward(_sprint, 1.0 if (player.sprinting and not player.aiming) else 0.0, delta * 5.0)
@@ -96,8 +95,8 @@ func _process(delta: float) -> void:
 	_wall = move_toward(_wall, target_wall, delta * 6.0)
 	var wall_k := smoothstep(0.0, 1.0, _wall)
 
-	var pos := HIP_POS.lerp(AIM_POS, aim_k)
-	pos = pos.lerp(SPRINT_POS, sprint_k)
+	var pos: Vector3 = (pose.hip as Vector3).lerp(pose.aim, aim_k)
+	pos = pos.lerp(pose.sprint, sprint_k)
 	pos += bob
 	pos += Vector3(_sway_rot.x * 0.05, -_sway_rot.y * 0.04, 0.0)  # lag behind the turn
 	pos += Vector3(0.0, -0.06, 0.12) * wall_k
@@ -106,18 +105,18 @@ func _process(delta: float) -> void:
 	_kick_vel += (-_kick * 260.0 - _kick_vel * 22.0) * delta
 	_kick += _kick_vel * delta
 	var kick_k := _kick * lerpf(1.0, 0.6, aim_k)
-	pos += Vector3(0.0, 0.01, 0.05) * kick_k
+	pos += (pose.kick_pos as Vector3) * kick_k
 
 	# Reload pose: tilt the gun to show the magazine well.
 	var reload_k := 0.0
-	if player.firearm:
-		reload_k = smoothstep(0.0, 1.0, player.firearm.reload_pose())
-	pos += Vector3(-0.02, 0.025, 0.03) * reload_k
+	if firearm:
+		reload_k = smoothstep(0.0, 1.0, firearm.reload_pose())
+	pos += (pose.reload_pos as Vector3) * reload_k
 	position = pos
 
-	var rot := (HIP_ROT * (1.0 - aim_k)).lerp(SPRINT_ROT, sprint_k)
-	rot += Vector3(14.0, 0.0, 0.0) * kick_k
-	rot += Vector3(18.0, -10.0, 32.0) * reload_k
+	var rot: Vector3 = ((pose.hip_rot as Vector3) * (1.0 - aim_k)).lerp(pose.sprint_rot, sprint_k)
+	rot += Vector3(float(pose.kick_rot), 0.0, 0.0) * kick_k
+	rot += (pose.reload_rot as Vector3) * reload_k
 	rot += Vector3(-rad_to_deg(_sway_rot.y) * 0.6, -rad_to_deg(_sway_rot.x) * 0.8, rad_to_deg(_sway_rot.x) * 0.5)
 	rot += Vector3(-45.0, 15.0, 0.0) * wall_k
 	rotation_degrees = rot
@@ -130,4 +129,9 @@ func kick(strength: float) -> void:
 
 ## True when the gun is clear to shoot (not sprinting, not jammed against a wall).
 func can_fire() -> bool:
-	return _sprint < 0.3 and _wall < 0.5 and not (player.firearm and player.firearm.reloading)
+	return _sprint < 0.3 and _wall < 0.5 and not (firearm and firearm.reloading)
+
+
+## How far into the aimed pose the gun is (0 = hip, 1 = on the sights).
+func aim_amount() -> float:
+	return smoothstep(0.0, 1.0, _aim)

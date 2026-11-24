@@ -14,11 +14,11 @@ Every push to `main` builds an APK automatically (GitHub Actions, about 5 minute
 
 ## Current step: shooting range (v0.4)
 
-The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
+The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a 100 yd range with five lanes (targets at 25 ft and 25 / 50 / 75 / 100 yd) running out of the yard, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
 
 | Thor control | Action |
 | --- | --- |
-| R2 | Fire (semi-auto) |
+| R2 | Fire (semi; full auto runs while held) |
 | X | Reload (hold: check magazine) |
 | D-pad left / right | Load for your **next** magazine |
 | D-pad down | Bullet paths + ballistics readout |
@@ -31,6 +31,7 @@ The game opens on a main menu (Play / Settings / Quit; Settings has look sensiti
 | L2 | Aim (zoom, always first person) |
 | L1 / R1 | Lean |
 | B | Crouch |
+| Y | Next weapon (rifle, pistol, Ka-Bar); hold: fire selector SEMI / AUTO |
 | Start | Pause + controls |
 
 **Phones (e.g. Galaxy S25 Ultra):** with no gamepad connected, an on-screen Xbox-layout controller appears: floating move stick on the left half (L3 beside it = sprint), drag anywhere on the right half to look (also while holding RT, so you can fire and steer with one thumb), RT fire, LT aim (tap = stays on, hold = while held), LB/RB lean, A B X Y, the D-pad, R3 view, View (inventory) and Menu (pause). It disappears the moment a gamepad connects or is used, and comes back when it disconnects; on the Thor it never shows. The HUD readouts move to the top corners while it's up.
@@ -89,7 +90,7 @@ Code: `scripts/inventory/` (ItemDef, ItemDB, InvItem, InvGrid, Encumbrance, Loot
 
 ## Ballistics
 
-Every bullet is simulated: G1 drag (Cd from the G1 table x sectional density / BC) + gravity each physics tick, so drop and velocity loss follow the real load. Sights are zeroed at 25 yd for 230gr ball.
+Every bullet is simulated: G1 drag (Cd from the G1 table x sectional density / BC) + gravity each physics tick, so drop and velocity loss follow the real load. Barrel length changes muzzle velocity per load (.45: ~1.8% per inch around 5 in; 5.56: ~35 fps per inch under 20 in, so an M4 runs ~190 fps slower than the reference figures). Sights are zeroed per gun: the 1911 at 25 yd for 230gr ball, the M4 at 50 yd for M193 (crossing again near 200 yd).
 
 On impact a bullet either ricochets (shallow angle on hard surfaces), turns to dust (frangible on hard surfaces), or penetrates: the thickness it crosses is measured from the geometry, converted to gel-equivalent millimetres for that material, and compared with what the bullet can still penetrate at its current speed (scaled from published 10% gel results). It stops inside (all energy delivered) or exits slower, possibly deflected. Hollow points expand in flesh above their opening speed, may plug in drywall/wood, and get crushed shut by steel/glass. Damage = energy deposited in the body part + tissue crushed by the (expanded) diameter.
 
@@ -102,6 +103,16 @@ On impact a bullet either ricochets (shallow angle on hard surfaces), turns to d
 | 200gr Lead SWC | 850 fps | 321 ft-lb | ~24" | Practice load, smears on hard targets |
 | 155gr Frangible | 1100 fps | 416 ft-lb | ~8" | Dust on steel/masonry: no ricochets |
 
+**5.56 NATO behaves like a rifle bullet.** It goes in nose-first for 4.7-5.5" of tissue (the "neck"), losing little speed, then turns sideways. If it's still fast enough when it turns it fragments: a much bigger wound (x2-2.7 the bore) that stops sooner, with the biggest piece keeping 55-70% of the weight. Slower (longer range, shorter barrel, through a wall) and it just tumbles: deeper, smaller wound. A thin limb or a graze never reaches the neck: a small "icepick" hole straight through that leaves ~7% of the energy behind. Walls knock it off balance, so it arrives at whatever is behind already tumbling. On steel it punches nose-first; M855's steel penetrator does much better there. Tracers (M856) draw a glowing streak from ~12 m out until they burn out at ~800 m, debug view or not.
+
+| Load (5.56 NATO, 20" ref.) | From the M4 (14.5") | Energy | Fragments (impact) | Under 2700 fps at | Group (M4) | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| M193 55gr ball | 2986 fps | 1089 ft-lb | above 2700 fps; splits 2500-2700 | ~100 m | ~2.5 MOA | Violent fragmentation up close; can't get through 1/4 in mild steel |
+| M855 62gr green tip | 2887 fps | 1148 ft-lb | above 2700 fps; splits 2500-2700 | ~78 m | ~3.4 MOA | Steel penetrator: through 1/4 in mild steel; less accurate (off-centre core) |
+| M856 63.7gr tracer | 2858 fps | 1155 ft-lb | above 2750 fps; splits 2550-2750 | - | ~4.3 MOA | Trace to ~800 m: shows where you shoot - and where you are |
+
+Velocities from the M4 are the Army's figures. Group = the M4's barrel (1.5 MOA) combined with each load's own dispersion, plus shot-to-shot velocity spread (25-35 fps) that strings shots vertically at range. Between "splits" and "fragments" the bullet breaks in two at the cannelure: a wound between tumbling and full fragmentation.
+
 Data: `scripts/ballistics/ammo_db.gd`. Materials: `scripts/ballistics/materials.gd`.
 
 ## Weapons
@@ -109,6 +120,7 @@ Data: `scripts/ballistics/ammo_db.gd`. Materials: `scripts/ballistics/materials.
 | Weapon | Status | Preview |
 | --- | --- | --- |
 | M1911 (.45 ACP) | Fires all six loads; 7+1, reloads, slide lock, mag check | `assets/weapons/m1911/preview.png` |
+| M4A1 (5.56 NATO) | Primary slot. Semi / full auto (800 rpm), 30+1, bolt hold-open, charging handle, selector, iron sights (carry-handle rear aperture + A2 front post) | `assets/weapons/m4a1/m4a1.blend` |
 
 Models are built by script with Blender's Python module, so they can be rebuilt or tweaked exactly:
 
@@ -122,9 +134,16 @@ python3 tools/blender/body_build.py assets/characters/base/source/base_mesh.fbx 
 python3 tools/blender/gear_build.py assets/characters/base/body.blend assets/gear
 python3 tools/blender/render_gear.py assets/characters/base/body.blend assets/gear /tmp/fit.png tshirt,pants,boots
 python3 tools/blender/render_fp.py assets/viewmodels/arms/arms.blend assets/weapons/m1911/m1911.blend /tmp/fp
+python3 tools/blender/m4_import.py assets/weapons/m4a1/source/M4A1_New.blend assets/weapons/m4a1   # M4A1 from the source model
+python3 tools/blender/stanag_build.py assets/weapons/stanag           # 30-round STANAG (also seated in the M4 by m4_import.py)
+python3 tools/blender/arms_build.py assets/viewmodels/arms rifle      # arms holding the M4
+python3 tools/blender/render_fp.py assets/viewmodels/arms/arms_rifle.blend assets/weapons/m4a1/m4a1.blend /tmp/fp 24 rifle
+python3 tools/blender/render_icons.py . m4                            # M4, STANAG and furniture icons
 ```
 
-First-person arms: 1,120 tris, 34 bones (forearm, hand, 3 per finger), rigid skinning. Rest pose = two-handed 1911 grip; they share the gun's coordinate space, so both .glb files line up under one parent.
+M4A1: ~10,100 tris, from Beefnasty96's model in `assets/weapons/m4a1/source/`. `m4_import.py` scales it to real size: 14.5 in barrel (bolt face to muzzle), 33.0 in overall with the stock on its last notch (29.75 in collapsed), 2.5 in wide, 8.45 in tall without a magazine (10.1 in with a 30-rounder), sight line 2.56 in over the bore. It swaps the round handguards for a four-rail handguard (top rail level with the flat-top rail, all four the same height) and names the moving parts for the game: bolt carrier (seen through the open ejection port, locks back on empty), charging handle, selector, trigger, magazine. The carry handle sits on the flat-top rail as its own part, ready to come off for optics. Measurements go to `m4_dims.json`, which the rifle arms are built from. The magazine is our own STANAG model (`stanag_build.py`, ~1,100 tris), shaped after a photo of a black USGI 30-rounder: 7 in tall, 0.88 in wide (1 in over the ribs), straight where it sits in the well, then a 20-degree forward curve below it, with the bottom edge square to the curve (sloping up toward the front), so it hangs in the rifle leaning forward like the real thing. Four stiffening ribs down each side (one at the front with a rounded top, one in the middle, a close pair at the rear), a thin flush floorplate with a small front lip, a tan follower and the top round showing. Dropped magazines lie on the floor as that model.
+
+First-person arms: 1,120 tris, 34 bones (forearm, hand, 3 per finger), rigid skinning. Rest pose = the gun's grip (two-handed 1911, or M4: right hand on the pistol grip, left under the rail); they share the gun's coordinate space, so both .glb files line up under one parent. Each gun's poses (hip, aim, sprint, reload, recoil, third-person hold) live in its `rig` in WeaponDB.
 
 The `.blend` file is also committed if you want to open it in Blender.
 
@@ -133,7 +152,7 @@ The `.blend` file is also committed if you want to open it in Blender.
 - `scenes/shooting_range.tscn` – shooting range (built in `scripts/shooting_range.gd`)
 - `scripts/player.gd` – movement, camera rig, first/third person
 - `scripts/viewmodel.gd` – first-person arms + gun: hip/aim/sprint poses, sway, bob, wall pull-back
-- `scripts/weapons/firearm.gd` – 1911 logic: chamber/magazine, ammo selection, reload, aim/zero, spread, recoil, slide/hammer animation, flash, brass
+- `scripts/weapons/firearm.gd` – one per gun slot (holster, primary): chamber/magazine, ammo selection, semi/auto, selector, reload, aim/zero, spread, recoil, slide or bolt animation, flash, brass; builds its own viewmodel and third-person gun
 - `scripts/ballistics/` – ammo data, materials, flight + terminal simulation, impact effects
 - `scripts/combat/` – damage model, hitboxes, target dummies
 - `tools/audio/synth_sfx.py` – generates the placeholder sound effects
@@ -159,6 +178,7 @@ godot --headless --fixed-fps 60 -s tools/tests/knife_test.gd      # Ka-Bar: swit
 godot --headless --fixed-fps 60 -s tools/tests/shoot_house_test.gd # house: rooms, doors, walls vs bullets, windows
 godot --headless --fixed-fps 60 -s tools/tests/enemy_ai_test.gd   # navmesh, sight, hearing, doors, shooting, knife, cover, meds, death
 godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as items, attachment tree, stats, models, light, suppressor + hearing, drops
+godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: barrel velocity, fragmentation, icepick, walls, steel, tracers, auto, selector, sights, reload
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
 ```
 
@@ -233,3 +253,5 @@ In the inventory, drop a magazine or part on a gun (in a grid or in your holster
 1911 parts so far (the range's "Gun parts" bench): a threaded 5.5 in barrel, a .45 suppressor, a dust-cover rail adapter, an M3-style weapon light, wraparound rubber grips, tritium night sights and 8-round magazines.
 - **Suppressor:** shots are about 30% as loud. Enemies hear them at about a third of the distance, there's no muzzle flash, and recoil is 12% softer, but the gun is slower to handle.
 - **Light:** D-pad down turns it on; hold D-pad down for the bullet-path readout.
+
+**M4A1:** you start with one on the sling (30 rounds of M193, one chambered). Its slots are the quad rail (which brings a tactical slot underneath - the M3 light fits), the stock, the folding rear sight, the A2 flash hider and a STANAG magazine well. The furniture is part of the model for now; optics and other attachments come next. The range's supply crate has 30-round magazines of M193, M855 and M856, empties and loose rounds; the parts bench has a spare M4. STANAG magazines are 1x2, so carry spares in a chest rig.

@@ -4,7 +4,7 @@ extends RefCounted
 ## loose rounds (one per AmmoType) and loot.
 
 const ICONS := "res://assets/icons/%s.png"
-const CASE_POWDER_KG := 0.0063   ## .45 ACP case + powder + primer, added to bullet weight.
+const CASE_POWDER_KG := {".45 ACP": 0.0063, "5.56 NATO": 0.0086}   ## Case + powder + primer, added to bullet weight.
 
 static var _defs: Dictionary = {}
 
@@ -23,7 +23,7 @@ static func all() -> Array[ItemDef]:
 
 
 static func round_weight(a: AmmoType) -> float:
-	return a.mass_kg() + CASE_POWDER_KG
+	return a.mass_kg() + float(CASE_POWDER_KG.get(a.caliber, 0.0063))
 
 
 static func _ensure() -> void:
@@ -50,6 +50,12 @@ static func _ensure() -> void:
 	mag8.caliber = ".45 ACP"
 	mag8.mag_family = "mag_1911"
 	mag8.icon_path = ICONS % "mag_1911"
+	var stanag := _add("mag_stanag", "STANAG magazine (30 rd)", "30rd", C.MAGAZINE, Vector2i(1, 2), 0.117, 1, 20,
+		"Aluminium 30-round 5.56 magazine, tan follower. Fits the M4 and any STANAG rifle.")
+	stanag.mag_capacity = 30
+	stanag.caliber = "5.56 NATO"
+	stanag.mag_family = "stanag"
+	stanag.scene_path = "res://assets/weapons/stanag/stanag.glb"
 	# Weapons and attachments come from WeaponDB. Weight here is the bare weapon/part;
 	# InvItem.weight() adds everything mounted on it.
 	for wid: String in WeaponDB.WEAPONS:
@@ -66,8 +72,8 @@ static func _ensure() -> void:
 		d.part_id = pid
 		d.scene_path = p.get("scene", "")
 	# Loose rounds, one stack type per load.
-	for a in AmmoDB.all_for(".45 ACP"):
-		var r := _add(a.id, ".45 ACP " + a.display_name, a.short_name, C.AMMO, Vector2i(1, 1), round_weight(a), 50, 1,
+	for a in AmmoDB.all_for(".45 ACP") + AmmoDB.all_for("5.56 NATO"):
+		var r := _add(a.id, a.caliber + " " + a.display_name, a.short_name, C.AMMO, Vector2i(1, 1), round_weight(a), 50, 1,
 			a.notes)
 		r.ammo_id = a.id
 		r.caliber = a.caliber
@@ -93,6 +99,9 @@ static func _part_short(p: Dictionary) -> String:
 		"sights": return "Sights"
 		"mount": return "Rail"
 		"tactical": return "Light"
+		"handguard": return "Rail"
+		"stock": return "Stock"
+		"rsight": return "BUIS"
 	return "Part"
 
 

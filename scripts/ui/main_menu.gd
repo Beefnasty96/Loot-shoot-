@@ -9,6 +9,7 @@ const CREDITS := [
 	["LOOT SHOOT", ""],
 	["Game design", "Beefnasty96"],
 	["Human base model", "Beefnasty96"],
+	["M4A1 model", "Beefnasty96"],
 	["Code, weapons, gear, textures, sounds", "Built with Claude (Anthropic)"],
 	["Engine", "Godot Engine 4.7 (MIT license)"],
 	["Ballistics references", "Published factory data and 10% gel tests"],

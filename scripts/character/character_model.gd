@@ -25,7 +25,7 @@ const CLOTH_SHADER := preload("res://shaders/cloth.gdshader")
 const MASKS_A := preload("res://assets/characters/base/textures/body_masks_a.png")
 const MASKS_B := preload("res://assets/characters/base/textures/body_masks_b.png")
 
-enum PoseMode { IDLE, PISTOL, KNIFE }
+enum PoseMode { IDLE, PISTOL, KNIFE, RIFLE }   ## RIFLE: right hand on the pistol grip, left under the handguard.
 
 var equipment := Equipment.new()
 var appearance := Appearance.new()
@@ -303,7 +303,8 @@ func _pose(speed_k: float) -> void:
 	G.resize(n)
 	var to_skel := skeleton.global_transform.affine_inverse()
 	var pending := {}   # bone -> desired direction (computed by IK at the chain root)
-	var curl := 1.25 if pose_mode == PoseMode.PISTOL else 0.35
+	var two_hand := pose_mode == PoseMode.PISTOL or pose_mode == PoseMode.RIFLE
+	var curl := 1.25 if two_hand else 0.35
 	var drop := crouch * 0.42
 	# Wounded: favour the worse leg, hunch over torso wounds, breathe hard, go down.
 	var hips_y := _rest_global[_b("Hips")].origin.y
@@ -342,7 +343,7 @@ func _pose(speed_k: float) -> void:
 			want = _rot(neutral, Vector3.RIGHT, crouch * 0.25 + hunch * 0.55 + sit * 0.2)
 			want = _apply_react(want, "torso", 0.4)
 		elif name == "UpperChest":
-			var pitch := aim_pitch * (0.45 if pose_mode == PoseMode.PISTOL else 0.15)
+			var pitch := aim_pitch * (0.45 if two_hand else 0.15)
 			want = _rot(neutral, Vector3.LEFT, pitch - hunch * 0.45 - breath)
 			if clutch_side != 0.0:
 				want = _rot(want, Vector3.FORWARD, -clutch_side * 0.12 * _clutch_k * (hurt.torso + 0.3))   # curl toward the wound
@@ -392,7 +393,12 @@ func _pose(speed_k: float) -> void:
 				target = to_skel * grip_right.global_position
 				pole = Vector3(side * 0.8, -1.0, -0.3)
 				hand_dir = to_skel.basis * (grip_right.global_transform.basis * Vector3.UP)
-			elif pose_mode == PoseMode.PISTOL and grip:
+			elif pose_mode == PoseMode.RIFLE and grip and side > 0:
+				# Support hand under the handguard, fingers forward and up round it.
+				target = to_skel * grip.global_position
+				pole = Vector3(side * 0.6, -1.0, 0.1)
+				hand_dir = to_skel.basis * (grip.global_transform.basis * Vector3(0.25, 0.35, -1.0)).normalized()
+			elif two_hand and grip:
 				target = to_skel * grip.global_position
 				pole = Vector3(side * 0.7, -1.0, -0.2)
 				var centre := to_skel * (grip_point.global_position if grip_point else grip.global_position)

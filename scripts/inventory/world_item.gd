@@ -28,16 +28,18 @@ static func _floor_point(node: Node3D, at: Vector3) -> Vector3:
 func _ready() -> void:
 	add_to_group("interactable")
 	add_to_group("world_item")
-	if item.def.is_weapon() and item.def.scene_path != "" and ResourceLoader.exists(item.def.scene_path):
-		# Guns and knives lie on the floor as themselves, parts and all.
+	if (item.def.is_weapon() or item.def.is_mag()) and item.def.scene_path != "" and ResourceLoader.exists(item.def.scene_path):
+		# Guns, knives and magazines that have a model lie on the floor as themselves, parts and all.
 		var m: Node3D = (load(item.def.scene_path) as PackedScene).instantiate()
 		add_child(m)
-		WeaponDB.assemble(item, m)
+		if item.def.is_weapon():
+			WeaponDB.assemble(item, m)
 		# On its side. A knife's handle is modelled on the pistol-grip line: lay that flat first.
 		var flat := Basis(Vector3.RIGHT, deg_to_rad(-72.0)) if item.def.weapon_kind == "knife" else Basis()
 		m.basis = Basis(Vector3.FORWARD, PI / 2.0) * flat
-		m.position.y = 0.015
-		_ring(0.22)
+		var long_gun := item.def.weapon_kind == "rifle"
+		m.position.y = 0.022 if long_gun else (0.013 if item.def.is_mag() else 0.015)   # the stock is the widest part
+		_ring(0.45 if long_gun else 0.22)
 		return
 	_sprite = Sprite3D.new()
 	_sprite.axis = Vector3.AXIS_Y          # lies flat on the floor

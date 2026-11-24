@@ -41,8 +41,8 @@ static func from_gear(g: GearInstance) -> InvItem:
 	return it
 
 
-static func magazine(ammo: AmmoType, rounds: int) -> InvItem:
-	var it := create("mag_1911")
+static func magazine(ammo: AmmoType, rounds: int, mag_id := "mag_1911") -> InvItem:
+	var it := create(mag_id)
 	it.mag_ammo = ammo
 	it.mag_count = clampi(rounds, 0, it.def.mag_capacity)
 	return it
@@ -52,6 +52,14 @@ static func magazine(ammo: AmmoType, rounds: int) -> InvItem:
 static func pistol(ammo: AmmoType, rounds_in_mag := 7, chamber := true) -> InvItem:
 	var it := create("m1911")
 	it.wpn_mag = magazine(ammo, rounds_in_mag)
+	it.wpn_chamber = ammo if chamber else null
+	return it
+
+
+## An M4A1 with a 30-round STANAG magazine of `rounds` and (optionally) one chambered.
+static func rifle(ammo: AmmoType, rounds_in_mag := 30, chamber := true) -> InvItem:
+	var it := create("m4a1")
+	it.wpn_mag = magazine(ammo, rounds_in_mag, "mag_stanag")
 	it.wpn_chamber = ammo if chamber else null
 	return it
 

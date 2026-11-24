@@ -44,6 +44,10 @@ func _process(_d: float) -> bool:
 			if d.label == "front door":
 				front = d
 		check(front != null and not front.is_open, "the front door starts closed")
+		# This test is about the building: keep the occupants still so none of them
+		# walks through the front door while we check it (enemy_ai_test covers them).
+		for e in get_nodes_in_group("enemy"):
+			e.process_mode = Node.PROCESS_MODE_DISABLED
 		# Open it from the street side.
 		front.use(rs.player)
 		# Interior wall: from the hallway into bedroom 3 (2x4 + drywall).

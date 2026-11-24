@@ -213,10 +213,14 @@ func _layout_mod_panel() -> void:
 	var y := TOP + 14
 	y = _layout_mod_slots(g, g, 0, y)
 	var st := WeaponDB.stats(g)
-	var vf := WeaponDB.velocity_factor(st.barrel_in)
+	var loads := AmmoDB.all_for(st.caliber)
+	var vel_text := ""
+	if not loads.is_empty():
+		var l0: AmmoType = loads[0]
+		vel_text = "%s %d fps" % [l0.short_name, roundi(l0.muzzle_fps * l0.velocity_factor(st.barrel_in))]
 	var lines := [
 		"Weight %s    Ergonomics %d    Recoil %d%%" % [Units.pounds(st.weight + (g.wpn_mag.weight() if g.wpn_mag else 0.0)), roundi(st.ergo), roundi(st.recoil * 100.0)],
-		"Barrel %.1f in (%+d%% velocity)    Loudness %d%%%s" % [st.barrel_in, roundi((vf - 1.0) * 100.0), roundi(st.loudness * 100.0), "    Light" if not st.light.is_empty() else ""],
+		"Barrel %.1f in (%s)    Loudness %d%%%s" % [st.barrel_in, vel_text, roundi(st.loudness * 100.0), "    Light" if not st.light.is_empty() else ""],
 	]
 	if not st.working:
 		lines.append("WON'T FIRE: missing " + ", ".join(st.missing))
@@ -641,10 +645,11 @@ func _slot_for(gun: InvItem, part: InvItem) -> Dictionary:
 	return taken
 
 
-## A gun's parts changed: rebuild the model if it's the one in your holster.
+## A gun's parts changed: rebuild the model if it's one of the guns you carry.
 func _gun_changed(gun: InvItem) -> void:
-	if player.firearm and player.firearm.gun == gun:
-		player.firearm.refresh()
+	for fa in player.firearms:
+		if fa.gun == gun:
+			fa.refresh()
 
 
 func _can_drop_at(t: Dictionary) -> bool:
@@ -765,8 +770,8 @@ func _return_held() -> bool:
 	if _held_from.has("mod_owner") and not (_held_from.mod_owner as InvItem).mods.has(_held_from.mod_slot):
 		(_held_from.mod_owner as InvItem).mods[_held_from.mod_slot] = _held
 		_held = null
-		if player.firearm:
-			player.firearm.refresh()
+		for fa in player.firearms:
+			fa.refresh()
 		_relayout()
 		return true
 	if _held_from.has("slot") and (_held_from.eq as Equipment).get_slot(_held_from.slot) == null and _held.gear:

@@ -163,3 +163,29 @@ hiss = highpass(noise(0.5), 3000) * env(len(n), 0.002, 0.05) * 0.25
 clack = pad(mix(burst(0.03, 1800, 0.0002, 0.006), ring(2600, 0.08, 0.015, 0.4)), 0.5)
 clack = np.roll(clack, int(SR * 0.012))
 save("shot_45_supp.wav", thup + hiss + clack * 0.9, 0.7)
+
+# --- 5.56 NATO from a 14.5 in carbine: a much sharper, louder supersonic crack and
+#     muzzle blast, less low boom than the .45, short and harsh.
+n = noise(0.8)
+crack = highpass(n, 3200) * env(len(n), 0.0002, 0.006) * 2.2
+blast = lowpass(n, 900) * env(len(n), 0.0004, 0.035) * 3.2
+boom = lowpass(n, 200) * env(len(n), 0.001, 0.06) * 3.0
+tail = lowpass(noise(0.8), 1500) * env(len(n), 0.015, 0.22) * 0.8
+save("shot_556.wav", crack + blast + boom + tail + ring(95, 0.8, 0.04, 0.8), 0.95)
+
+# --- AR mechanics: mag out (button click + slide out), mag in (seat + slap),
+#     bolt catch release (carrier slams home), charging handle (pull + release),
+#     selector (detent click).
+mo = pad(mix(burst(0.02, 1500, 0.0002, 0.004), ring(2400, 0.06, 0.01, 0.4),
+             np.concatenate([np.zeros(int(SR * 0.05)), lowpass(noise(0.12), 1800) * env(int(SR * 0.12), 0.005, 0.03) * 0.6])), 0.25)
+save("mag_out_rifle.wav", mo, 0.6)
+seat = mix(burst(0.03, 700, 0.0003, 0.006), ring(1300, 0.06, 0.015, 0.6))
+slap = mix(burst(0.04, 500, 0.0002, 0.01) * 1.4, ring(900, 0.08, 0.02, 0.5))
+save("mag_in_rifle.wav", pad(np.concatenate([seat, np.zeros(int(SR * 0.06)), slap]), 0.3), 0.75)
+br = pad(mix(burst(0.02, 2000, 0.0002, 0.004), np.concatenate([np.zeros(int(SR * 0.03)),
+         mix(burst(0.06, 400, 0.0002, 0.015) * 1.5, ring(700, 0.18, 0.04, 0.9), ring(2100, 0.12, 0.02, 0.4))])), 0.3)
+save("bolt_release.wav", br, 0.85)
+pull = lowpass(noise(0.14), 2500) * env(int(SR * 0.14), 0.01, 0.05) * 0.7
+home = mix(burst(0.06, 450, 0.0002, 0.014) * 1.5, ring(720, 0.18, 0.04, 0.9), ring(2000, 0.1, 0.02, 0.4))
+save("charge.wav", pad(np.concatenate([pull, np.zeros(int(SR * 0.12)), home]), 0.45), 0.8)
+save("selector.wav", pad(mix(burst(0.015, 2500, 0.0001, 0.003), ring(3800, 0.05, 0.008, 0.5)), 0.08), 0.55)

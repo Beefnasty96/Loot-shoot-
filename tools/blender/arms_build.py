@@ -1,7 +1,8 @@
 """Builds low-poly first-person arms (gloves + sleeves) gripping the M1911.
 
-Usage:  python3 arms_build.py <asset_dir>
-Writes <asset_dir>/arms.blend, <asset_dir>/arms.glb and textures in <asset_dir>/textures.
+Usage:  python3 arms_build.py <asset_dir> [rifle]
+Writes <asset_dir>/arms.blend, <asset_dir>/arms.glb (or arms_rifle.* holding the M4A1)
+and textures in <asset_dir>/textures.
 
 - Same space as m1911_build.py: millimetres -> metres, +Y = muzzle, +Z = up,
   +X = right. Place arms.glb and m1911.glb under the same parent and they line up.
@@ -235,21 +236,104 @@ def build_arms():
     return b.build("Arms")
 
 
+def build_rifle_arms():
+    """Arms holding the M4A1 (m4_import.py space, measurements from m4_dims.json): right
+    hand on the A2 pistol grip with the index finger on the trigger and the thumb by the
+    selector, left hand under the quad rail, palm up, fingers round the right side and
+    the thumb along the left."""
+    import json
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "weapons", "m4a1", "m4_dims.json")) as fh:
+        dims = json.load(fh)
+    glove = material("Glove", (0.13, 0.13, 0.14), "glove.png", rough=0.85, metal=0.0)
+    knuckle = material("KnuckleGuard", (0.2, 0.2, 0.21), "knuckle.png", rough=0.6, metal=0.0)
+    sleeve = material("Sleeve", (0.3, 0.32, 0.2), "sleeve.png", rough=0.9, metal=0.0)
+    b = Builder()
+
+    # Pistol grip frame: front strap line from GF0 down the grip, GN across toward the back.
+    ang = math.radians(26.0)
+    gd = Vector((-math.sin(ang), -math.cos(ang)))
+    gn = Vector((-math.cos(ang), math.sin(ang)))
+    gf0 = Vector((-118.0, -52.0))
+    depth = 46.0
+    half_w = dims["grip_width_m"] * 1000.0 / 2.0
+
+    def RG(t, s_, x):
+        p = gf0 + gd * t + gn * s_
+        return Vector((x, p.x, p.y))
+
+    def rg_center(t):
+        return RG(t, depth / 2.0, 0.0)
+
+    def outward(t):
+        return lambda mid: (mid - rg_center(t)).normalized()
+
+    w = half_w + 5.5          # palm surface off the grip side
+    # ================= RIGHT HAND (pistol grip) =================
+    r_wrist = RG(62, depth + 14, w - 2)
+    r_elbow = Vector((150, -400, -240))
+    r_knuckles = RG(30, -4, w + 8)
+    b.bone("Forearm.R", r_elbow, r_wrist)
+    b.bone("Hand.R", r_wrist, r_knuckles, "Forearm.R")
+    b.segment(r_elbow, r_wrist + (r_elbow - r_wrist).normalized() * 45, 80, 70, 70, 62, (0.3, 0, 1), sleeve, "Forearm.R")
+    b.segment(r_wrist + (r_elbow - r_wrist).normalized() * 55, r_wrist, 62, 52, 56, 46, (0.3, 0, 1), glove, "Forearm.R")
+    b.segment(RG(36, depth + 10, w + 2), RG(36, -4, w + 2), 80, 24, 82, 22, (1, 0, 0), glove, "Hand.R")
+    b.segment(RG(42, depth + 4, w - 2), r_wrist, 66, 30, 56, 44, (1, 0, 0.2), glove, "Hand.R")
+    b.segment(RG(36, depth - 6, w + 15), RG(36, -3, w + 15), 62, 6, 66, 6, (1, 0, 0), knuckle, "Hand.R")
+    # Thumb: over the top of the grip and along the left side, resting above the selector.
+    sel = Vector(dims.get("selector", [0.0, -0.1269, -0.0334])) * 1000.0
+    thumb = [RG(4, depth + 2, w - 8), Vector((-15, sel.y - 22, sel.z + 2)), Vector((-19, sel.y - 6, sel.z + 4)), Vector((-19, sel.y + 11, sel.z + 5))]
+    b.finger("R", "Thumb", thumb, [26, 22, 20, 18], lambda mid: Vector((-0.6, 0, 0.8)), glove, "Hand.R")
+    # Index finger: from the front of the grip, pad on the trigger face.
+    tip_y = dims["trigger_face"][0] * 1000.0 + 1.0
+    tip_z = dims["trigger_face"][1] * 1000.0
+    index = [Vector((w + 3, gf0.x - 10, gf0.y + 4)), Vector((12, tip_y - 12, tip_z + 9)), Vector((5, tip_y - 3, tip_z + 4)), Vector((0, tip_y, tip_z))]
+    b.finger("R", "Index", index, [19, 18, 16, 15], lambda mid: Vector((0.3, 0.2, 1)).normalized(), glove, "Hand.R")
+    # Middle, ring, pinky round the front strap below the trigger guard.
+    for name, t, fw in (("Middle", 22, 20), ("Ring", 40, 19), ("Pinky", 58, 16)):
+        pts = [RG(t, -2, w), RG(t, -13, -half_w + 2), RG(t + 1, 5, -w), RG(t + 1, 19, -w + 2)]
+        b.finger("R", name, pts, [fw, fw * 0.95, fw * 0.88, fw * 0.8], outward(t), glove, "Hand.R")
+
+    # ================= LEFT HAND (under the quad rail) =================
+    y0, y1 = dims["handguard_y"]
+    yh = (y0 + y1) / 2.0 * 1000.0
+    R = dims["rail_top_m"] * 1000.0      # rail tops this far from the bore, all round
+    l_wrist = Vector((-58 - (R - 24), yh - 14, -44 - (R - 24)))
+    l_elbow = Vector((-200, yh - 320, -290))
+    l_knuckles = Vector((12, yh, -R - 7))
+    b.bone("Forearm.L", l_elbow, l_wrist)
+    b.bone("Hand.L", l_wrist, l_knuckles, "Forearm.L")
+    b.segment(l_elbow, l_wrist + (l_elbow - l_wrist).normalized() * 45, 80, 70, 70, 62, (-0.3, 0, 1), sleeve, "Forearm.L")
+    b.segment(l_wrist + (l_elbow - l_wrist).normalized() * 55, l_wrist, 62, 52, 56, 46, (-0.3, 0, 1), glove, "Forearm.L")
+    b.segment(Vector((-40, yh, -R - 12)), Vector((12, yh, -R - 9)), 78, 24, 80, 22, (0, 0, -1), glove, "Hand.L")
+    b.segment(Vector((-36, yh - 4, -R - 14)), l_wrist, 66, 28, 56, 44, (0, 0, -1), glove, "Hand.L")
+    b.segment(Vector((-22, yh, -R - 25)), Vector((10, yh, -R - 22)), 64, 6, 66, 6, (0, 0, -1), knuckle, "Hand.L")
+    for name, dy, fw in (("Index", 27, 18), ("Middle", 9, 19), ("Ring", -9, 18), ("Pinky", -26, 15)):
+        y = yh + dy
+        pts = [Vector((14, y, -R - 7)), Vector((R + 3, y, -R + 6)), Vector((R + 6, y, -1)), Vector((R + 3, y, R - 12))]
+        b.finger("L", name, pts, [fw, fw * 0.95, fw * 0.88, fw * 0.8], lambda mid: Vector((mid.x, 0, mid.z)).normalized(), glove, "Hand.L")
+    thumb_l = [Vector((-24, yh - 18, -R - 10)), Vector((-R - 5, yh + 2, -R - 1)), Vector((-R - 6, yh + 20, -R + 6)), Vector((-R - 5, yh + 36, -R + 11))]
+    b.finger("L", "Thumb", thumb_l, [26, 22, 20, 18], lambda mid: Vector((-0.8, 0, -0.6)), glove, "Hand.L")
+
+    return b.build("Arms")
+
+
 if __name__ == "__main__":
     reset()
     make_textures()
-    rig, arms = build_arms()
+    rifle = len(sys.argv) > 2 and sys.argv[2] == "rifle"
+    rig, arms = build_rifle_arms() if rifle else build_arms()
     tris = sum(len(p.vertices) - 2 for p in arms.data.polygons)
     print(f"Arms: {tris} tris, {len(rig.data.bones)} bones")
-    blend = os.path.join(ASSET_DIR, "arms.blend")
+    stem = "arms_rifle" if rifle else "arms"
+    blend = os.path.join(ASSET_DIR, stem + ".blend")
     bpy.ops.wm.save_as_mainfile(filepath=blend)
     bpy.ops.file.make_paths_relative()
     bpy.ops.wm.save_mainfile()
     bpy.ops.export_scene.gltf(
-        filepath=os.path.join(ASSET_DIR, "arms.glb"),
+        filepath=os.path.join(ASSET_DIR, stem + ".glb"),
         export_format="GLB",
         export_yup=True,
         export_skins=True,
         export_animations=False,
     )
-    print("wrote", blend, "and arms.glb")
+    print("wrote", blend, "and", stem + ".glb")
