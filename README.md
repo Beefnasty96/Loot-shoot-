@@ -34,6 +34,8 @@ The game opens on a main menu (Play / Settings / Quit; Settings has look sensiti
 | Y | Next weapon (rifle, pistol, Ka-Bar); hold: fire selector SEMI / AUTO |
 | Start | Pause + controls |
 
+**Phones (e.g. Galaxy S25 Ultra):** with no gamepad connected, an on-screen Xbox-layout controller appears: floating move stick on the left half (L3 beside it = sprint), drag anywhere on the right half to look (also while holding RT, so you can fire and steer with one thumb), RT fire, LT aim (tap = stays on, hold = while held), LB/RB lean, A B X Y, the D-pad, R3 view, View (inventory) and Menu (pause). It disappears the moment a gamepad connects or is used, and comes back when it disconnects; on the Thor it never shows. The HUD readouts move to the top corners while it's up.
+
 PC testing: WASD, mouse, V view, Shift sprint, C shoulder, Q/E lean, Ctrl crouch, right mouse aim, Esc pause.
 
 All measurements shown in game are US units (feet, inches, pounds, fps, ft-lbs); the engine works in metres internally (`scripts/units.gd`).
@@ -174,6 +176,7 @@ godot --headless --fixed-fps 60 -s tools/tests/shoot_house_test.gd # house: room
 godot --headless --fixed-fps 60 -s tools/tests/enemy_ai_test.gd   # navmesh, sight, hearing, doors, shooting, knife, cover, meds, death
 godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as items, attachment tree, stats, models, light, suppressor + hearing, drops
 godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: barrel velocity, fragmentation, icepick, walls, steel, tracers, auto, selector, sights, reload
+godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
 ```
 
 ## Bodies and hit reactions

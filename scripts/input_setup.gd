@@ -76,6 +76,9 @@ func _add_keys(action: String, keys: Array) -> void:
 
 
 func _add_mouse(action: String, buttons: Array) -> void:
+	# Phones turn touches into mouse clicks: without this every tap would fire/aim.
+	if OS.has_feature("mobile"):
+		return
 	for b in buttons:
 		var ev := InputEventMouseButton.new()
 		ev.button_index = b

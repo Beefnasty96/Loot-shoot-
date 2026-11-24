@@ -21,11 +21,19 @@ var _body: Dictionary = {}     ## zone -> ColorRect of the body diagram
 var _body_text: Label
 var _death: Label
 var _objective: Label
+var touch: TouchControls          ## On-screen controller (phones without a gamepad).
+var _hint: Label
+var _body_root: Control
+var _touch_layout := false
+var _home := {}                   ## Control -> its normal position (before the touch layout moved it).
 var objective_text := ""       ## Set by the level ("Hostiles: 3 left").
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# On-screen controller for phones (hides itself when a gamepad is connected).
+	touch = TouchControls.new()
+	add_child(touch)
 	# Full-screen overlays first so the text draws over them.
 	_shock = ColorRect.new()
 	_shock.color = Color(0, 0, 0, 0)
@@ -48,6 +56,7 @@ func _ready() -> void:
 	_status.position = Vector2(24, 18)
 
 	var hint := _label("START: controls    SELECT: inventory", 22)
+	_hint = hint
 	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	hint.position += Vector2(24, -48)
 
@@ -116,12 +125,31 @@ func _label(text: String, size: int) -> Label:
 	return l
 
 
+## With the on-screen controller up, the bottom corners belong to the stick and
+## the face buttons: move the ammo readout to the top right and the body diagram
+## and load to the top left (clear of the bumpers).
+func _apply_touch_layout(on: bool) -> void:
+	_touch_layout = on
+	var h := get_viewport().get_visible_rect().size.y
+	var moves := {_ammo_big: Vector2(-170, -(h - 360)), _ammo_info: Vector2(-170, -(h - 360)),
+		_body_root: Vector2(300, -(h - 560)), _load: Vector2(300, 590 - (h - 84))}
+	for c: Control in moves:
+		if c == null:
+			continue
+		if not _home.has(c):
+			_home[c] = c.position
+		c.position = (_home[c] as Vector2) + (moves[c] as Vector2 if on else Vector2.ZERO)
+	if _hint:
+		_hint.visible = not on
+
+
 ## Little body outline, bottom left: each zone goes from grey-green to red as it's hurt, black when gone.
 func _build_body_diagram() -> void:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	root.position += Vector2(30, -250)
 	add_child(root)
+	_body_root = root
 	var parts := {
 		head = Rect2(22, 0, 20, 22), thorax = Rect2(14, 24, 36, 30), stomach = Rect2(16, 56, 32, 22),
 		arm_l = Rect2(52, 26, 11, 50), arm_r = Rect2(1, 26, 11, 50), leg_l = Rect2(34, 80, 14, 56), leg_r = Rect2(16, 80, 14, 56),
@@ -290,12 +318,16 @@ func _on_impact(info: Dictionary) -> void:
 
 
 func _process(_delta: float) -> void:
+	if touch and touch.visible != _touch_layout:
+		_apply_touch_layout(touch.visible)
 	if player == null:
 		return
 	var open := inventory != null and inventory.is_open()
 	for c in get_children():
 		if c != inventory and c != _pause_panel and c is CanvasItem:
 			(c as CanvasItem).visible = not open
+	if _hint and _touch_layout:
+		_hint.visible = false   # the on-screen buttons are labelled
 	var stance := "Crouched" if player.crouching else ("Sprinting" if player.sprinting else "Standing")
 	if player.aiming:
 		stance += " - Aiming"
