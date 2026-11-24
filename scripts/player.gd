@@ -354,6 +354,15 @@ func _turn(yaw_deg: float, pitch_deg: float) -> void:
 	pitch = clampf(pitch + pitch_deg, -85.0, 85.0)
 
 
+## Touch-screen look (TouchControls): drag in degrees, scaled like the stick.
+func touch_look(drag_deg: Vector2) -> void:
+	if ui_locked:
+		return
+	var s := (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
+	var inv := -1.0 if Settings.invert_look_y else 1.0
+	_turn(-drag_deg.x * s, -drag_deg.y * s * inv)
+
+
 # ---------------------------------------------------------------- per frame
 
 func _process(delta: float) -> void:
