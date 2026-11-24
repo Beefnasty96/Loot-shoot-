@@ -1,14 +1,15 @@
 """Builds a low-poly 30-round STANAG magazine (5.56 NATO, USGI aluminium) with bpy.
 
-Sized from a real USGI 30-rounder and fitted to the game's M4A1 (m4_import.py places
+Black anodized, shaped after a photo of a USGI 30-rounder; sized from a real one and fitted to the game's M4A1 (m4_import.py places
 it in the magazine well, where the source model's magazine was):
 - ~7.1 in from the feed lips to the bottom of the floorplate,
 - 0.88 in (22.4 mm) wide, 0.95 in over the stiffening ribs,
 - 2.5 in (63 mm) front to back,
-- straight for the top 2.6 in (the part that sits in the well), then curving forward
-  (the bottom ends up ~20 mm ahead of the top),
-- two stiffening ribs down each side, a dimpled base, a black steel floorplate with
-  its front tab, a tan anti-tilt follower and the top round (staggered left).
+- straight for the top ~2.8 in (the part that sits in the well), then one smooth
+  gentle forward arc (14 degrees), so the base sits ~0.7 in ahead of the top,
+- four stiffening ribs down each side (one at the front, one mid, a close pair at the
+  rear), a thin flush floorplate with a small front lip, a tan anti-tilt follower and
+  the top round (staggered left).
 
 Local space: +Y forward (toward the muzzle), +Z up, origin at the top centre of the
 feed lips. Usage:  python3 stanag_build.py <asset_dir>  (writes stanag.blend / stanag.glb)
@@ -26,10 +27,14 @@ from PIL import Image
 S = 0.001
 WIDTH = 22.4
 DEPTH = 63.0
-TOP_STRAIGHT = 66.0      # mm of straight body below the lips
-CURVE_LEN = 101.0        # mm of curved body below that
-CURVE_DEG = 15.0         # how far the bottom has turned forward
-FLOOR_T = 7.5
+TOP_STRAIGHT = 72.0      # mm of straight body below the lips: the part that sits in the well
+CURVE_LEN = 92.0        # mm of curved body below that: one smooth arc
+CURVE_DEG = 14.0         # gentle: the part below the well leans forward ~7 degrees on average
+FLOOR_T = 4.0            # thin floorplate, nearly flush with the body
+## Stiffening ribs, as on a USGI 30-rounder (front to back): (centre as a fraction of the
+## depth from the front, width mm, mm below the lips where it starts). The front rib starts
+## lower with a rounded top; the two rear ribs run close together up to the top.
+RIBS = [(0.10, 4.0, 22.0), (0.40, 3.5, 12.0), (0.72, 3.5, 6.0), (0.84, 3.5, 6.0)]
 
 
 def _material(name, color, rough, metal, tex=None):
@@ -48,14 +53,14 @@ def _material(name, color, rough, metal, tex=None):
 
 
 def _texture(path):
-    """Dry-film grey-green with fine speckle and faint horizontal machining."""
+    """Black anodized aluminium (slightly blue-grey where it catches light), fine speckle."""
     rng = np.random.default_rng(30)
-    img = np.zeros((64, 64, 3), np.float32) + np.array([88, 92, 82], np.float32)
+    img = np.zeros((64, 64, 3), np.float32) + np.array([44, 45, 50], np.float32)
     img += rng.normal(0, 3.0, (64, 64, 1)) + rng.normal(0, 1.5, (64, 1, 1)).transpose(1, 0, 2)
     Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).save(path)
 
 
-def _spine(n_curve=6):
+def _spine(n_curve=10):
     """Centre line points (y, z) with the body's forward angle at each, top to bottom."""
     pts = [(0.0, 0.0, 0.0), (0.0, -TOP_STRAIGHT, 0.0)]
     y, z = 0.0, -TOP_STRAIGHT
@@ -134,7 +139,7 @@ def build_stanag(tex_dir):
     os.makedirs(tex_dir, exist_ok=True)
     tex = os.path.join(tex_dir, "stanag_body.png")
     _texture(tex)
-    body_m = _material("StanagBody", (0.36, 0.38, 0.33), 0.7, 0.15, tex)
+    body_m = _material("StanagBody", (0.15, 0.15, 0.17), 0.45, 0.2, tex)
     floor_m = _material("StanagFloor", (0.06, 0.06, 0.065), 0.55, 0.3)
     foll_m = _material("StanagFollower", (0.62, 0.55, 0.38), 0.75, 0.0)
     brass = _material("StanagBrass", (0.75, 0.55, 0.22), 0.4, 0.5)
@@ -153,24 +158,32 @@ def build_stanag(tex_dir):
     parts = [_loft("Body", rings, body_m)]
     # Stiffening ribs: raised strips down both sides, following the curve.
     for side in (-1, 1):
-        for dd, w in ((-hd + 15.0, 6.0), (hd - 17.0, 6.0)):
+        for frac, w, start in RIBS:
+            dd = hd - frac * DEPTH          # + = toward the front
             rr = []
-            for (y, z, a) in spine[1:]:
+            for (y, z, a) in spine:
+                if z > -start:
+                    continue
                 fwd = Vector((0.0, math.cos(a), -math.sin(a)))
                 base = Vector((side * hw, y, z)) + fwd * dd
                 rr.append([base + fwd * (-w / 2), base + fwd * (w / 2),
-                           base + Vector((side * 0.9, 0, 0)) + fwd * (w / 2 - 1.0), base + Vector((side * 0.9, 0, 0)) + fwd * (-w / 2 + 1.0)])
-            top = Vector((side * hw, 0.0, -24.0))
-            rr.insert(0, [r - Vector((0, 0, 0)) for r in [top + Vector((0, dd - w / 2, 0)), top + Vector((0, dd + w / 2, 0)),
-                                                         top + Vector((side * 0.9, dd + w / 2 - 1.0, 0)), top + Vector((side * 0.9, dd - w / 2 + 1.0, 0))]])
-            parts.append(_loft(f"Rib{side}{dd}", rr, body_m))
-    # Floorplate: a bit bigger than the body, with the front tab.
+                           base + Vector((side * 1.3, 0, 0)) + fwd * (w / 2 - 0.8), base + Vector((side * 1.3, 0, 0)) + fwd * (-w / 2 + 0.8)])
+            top = Vector((side * hw, 0.0, -start))
+            rr.insert(0, [top + Vector((0, dd - w / 2, 0)), top + Vector((0, dd + w / 2, 0)),
+                          top + Vector((side * 1.3, dd + w / 2 - 0.8, -1.5)), top + Vector((side * 1.3, dd - w / 2 + 0.8, -1.5))])
+            # Stop a little above the floorplate.
+            last = rr[-1]
+            ya, za, aa = spine[-1]
+            back = Vector((0.0, math.sin(aa), math.cos(aa))) * 6.0
+            rr[-1] = [v + back for v in last]
+            parts.append(_loft(f"Rib{side}_{frac}", rr, body_m))
+    # Floorplate: thin, just proud of the body, with a small lip at the front.
     yb, zb, ab = spine[-1]
     up = Vector((0.0, math.sin(ab), math.cos(ab)))
     fwd = Vector((0.0, math.cos(ab), -math.sin(ab)))
-    c = Vector((0.0, yb, zb)) - up * (FLOOR_T / 2 - 1.0)
-    parts.append(_box("Floorplate", c, (WIDTH + 3.0, DEPTH + 4.0, FLOOR_T), floor_m, ab))
-    parts.append(_box("FloorTab", c + fwd * (hd + 3.5) - up * 1.0, (WIDTH - 6.0, 4.0, FLOOR_T - 2.0), floor_m, ab))
+    c = Vector((0.0, yb, zb)) - up * (FLOOR_T / 2 - 0.5)
+    parts.append(_box("Floorplate", c, (WIDTH + 1.6, DEPTH + 1.6, FLOOR_T), floor_m, ab))
+    parts.append(_box("FloorLip", c + fwd * (hd + 1.6), (WIDTH - 4.0, 2.0, FLOOR_T), floor_m, ab))
     # Follower (tan) just visible between the lips, and the top round on the left.
     parts.append(_box("Follower", Vector((0.0, 0.0, -3.0)), (WIDTH - 5.0, DEPTH - 8.0, 2.0), foll_m))
     case_c = Vector((-2.6, -6.0, -2.4))

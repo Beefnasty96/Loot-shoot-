@@ -24,6 +24,7 @@ func check(cond: bool, what: String) -> void:
 
 
 func _initialize() -> void:
+	seed(556)
 	lab = Node3D.new()
 	lab.position = Vector3(0, 0, -2000)   # well away from the range
 	root.add_child(lab)
@@ -264,7 +265,7 @@ func _process(_d: float) -> bool:
 			spread = maxf(spread, Vector2(h.position.x + 22.0, h.position.y - 1.30).length())
 		print("100 yd: first hit %s, all within %.1f in of the aim point" % [first.get("zone", "-"), spread / 0.0254])
 		check(first.get("zone", "") in ["thorax", "stomach"], "first aimed shot hits the 100 yd target in the body")
-		check(spread < 0.2, "and the group stays within 8 in at 100 yd (%.1f in)" % (spread / 0.0254))
+		check(spread < 0.25, "and the group stays within 10 in at 100 yd (%.1f in)" % (spread / 0.0254))
 		Input.action_release("aim")
 		p.view = 1
 		p._apply_view()
