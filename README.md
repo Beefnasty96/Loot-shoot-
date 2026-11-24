@@ -118,7 +118,7 @@ Data: `scripts/ballistics/ammo_db.gd`. Materials: `scripts/ballistics/materials.
 | Weapon | Status | Preview |
 | --- | --- | --- |
 | M1911 (.45 ACP) | Fires all six loads; 7+1, reloads, slide lock, mag check | `assets/weapons/m1911/preview.png` |
-| M4A1 (5.56 NATO) | Primary slot. Semi / full auto (800 rpm), 30+1, bolt hold-open, charging handle, dust cover, selector, iron sights (folding rear aperture + A2 front post) | `assets/weapons/m4a1/m4a1.blend` |
+| M4A1 (5.56 NATO) | Primary slot. Semi / full auto (800 rpm), 30+1, bolt hold-open, charging handle, selector, iron sights (carry-handle rear aperture + A2 front post) | `assets/weapons/m4a1/m4a1.blend` |
 
 Models are built by script with Blender's Python module, so they can be rebuilt or tweaked exactly:
 
@@ -132,13 +132,13 @@ python3 tools/blender/body_build.py assets/characters/base/source/base_mesh.fbx 
 python3 tools/blender/gear_build.py assets/characters/base/body.blend assets/gear
 python3 tools/blender/render_gear.py assets/characters/base/body.blend assets/gear /tmp/fit.png tshirt,pants,boots
 python3 tools/blender/render_fp.py assets/viewmodels/arms/arms.blend assets/weapons/m1911/m1911.blend /tmp/fp
-python3 tools/blender/m4_build.py assets/weapons/m4a1                 # M4A1 (textures generated too)
+python3 tools/blender/m4_import.py assets/weapons/m4a1/source/M4A1_New.blend assets/weapons/m4a1   # M4A1 from the source model
 python3 tools/blender/arms_build.py assets/viewmodels/arms rifle      # arms holding the M4
 python3 tools/blender/render_fp.py assets/viewmodels/arms/arms_rifle.blend assets/weapons/m4a1/m4a1.blend /tmp/fp 24 rifle
 python3 tools/blender/render_icons.py . m4                            # M4, STANAG and furniture icons
 ```
 
-M4A1: ~2,850 tris. Flat-top upper with a Picatinny rail, four-rail handguard, folding rear sight lined up with the A2 front sight post (sight line 64 mm over the bore), 14.5 in barrel and birdcage, six-position stock, curved 30-round STANAG magazine. Moving parts: bolt carrier (seen through the ejection port, locks back on empty), charging handle, dust cover (pops open on the first shot), selector (SAFE/SEMI/AUTO), trigger, magazine.
+M4A1: ~10,100 tris, from the source model in `assets/weapons/m4a1/source/` (a low-poly M4A1 "remade from scratch"). `m4_import.py` scales it to real size: 14.5 in barrel (bolt face to muzzle), 33.0 in overall with the stock on its last notch (29.75 in collapsed), 2.5 in wide, 8.45 in tall without a magazine (10.1 in with a 30-rounder), sight line 2.56 in over the bore. It swaps the round handguards for a four-rail handguard (top rail level with the flat-top rail, all four the same height) and names the moving parts for the game: bolt carrier (seen through the open ejection port, locks back on empty), charging handle, selector, trigger, magazine. The carry handle sits on the flat-top rail as its own part, ready to come off for optics. Measurements go to `m4_dims.json`, which the rifle arms are built from.
 
 First-person arms: 1,120 tris, 34 bones (forearm, hand, 3 per finger), rigid skinning. Rest pose = the gun's grip (two-handed 1911, or M4: right hand on the pistol grip, left under the rail); they share the gun's coordinate space, so both .glb files line up under one parent. Each gun's poses (hip, aim, sprint, reload, recoil, third-person hold) live in its `rig` in WeaponDB.
 

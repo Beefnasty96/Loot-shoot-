@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bdup8ubih0oqw"
-path="res://.godot/imported/polymer.png-3b150afe2a6ca73d0ad0ad16877e2b07.ctex"
+uid="uid://ytxbngaft81i"
+path="res://.godot/imported/carry_m4.png-80a24b001889a9c4d177795265353a2f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/weapons/m4a1/textures/polymer.png"
-dest_files=["res://.godot/imported/polymer.png-3b150afe2a6ca73d0ad0ad16877e2b07.ctex"]
+source_file="res://assets/icons/carry_m4.png"
+dest_files=["res://.godot/imported/carry_m4.png-80a24b001889a9c4d177795265353a2f.ctex"]
 
 [params]
 
