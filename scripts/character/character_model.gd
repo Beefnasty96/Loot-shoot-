@@ -25,7 +25,7 @@ const CLOTH_SHADER := preload("res://shaders/cloth.gdshader")
 const MASKS_A := preload("res://assets/characters/base/textures/body_masks_a.png")
 const MASKS_B := preload("res://assets/characters/base/textures/body_masks_b.png")
 
-enum PoseMode { IDLE, PISTOL }
+enum PoseMode { IDLE, PISTOL, KNIFE }
 
 var equipment := Equipment.new()
 var appearance := Appearance.new()
@@ -388,7 +388,11 @@ func _pose(speed_k: float) -> void:
 			var pole: Vector3
 			var hand_dir: Vector3
 			var grip: Node3D = grip_left if side > 0 else grip_right
-			if pose_mode == PoseMode.PISTOL and grip:
+			if pose_mode == PoseMode.KNIFE and side < 0 and grip_right:
+				target = to_skel * grip_right.global_position
+				pole = Vector3(side * 0.8, -1.0, -0.3)
+				hand_dir = to_skel.basis * (grip_right.global_transform.basis * Vector3.UP)
+			elif pose_mode == PoseMode.PISTOL and grip:
 				target = to_skel * grip.global_position
 				pole = Vector3(side * 0.7, -1.0, -0.2)
 				var centre := to_skel * (grip_point.global_position if grip_point else grip.global_position)

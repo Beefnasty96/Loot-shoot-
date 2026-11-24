@@ -14,6 +14,7 @@ extends Node
 ## Every impact emits `impact(info)` with speeds, energies (J and ft-lbs) and outcome.
 
 signal impact(info: Dictionary)
+signal melee_impact(info: Dictionary)   ## Blade contacts (Melee.strike), for the HUD and sounds.
 
 const GRAVITY := 9.81
 const AIR_DENSITY := 1.225

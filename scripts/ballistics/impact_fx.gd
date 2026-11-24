@@ -147,6 +147,8 @@ func _break(collider: Object) -> void:
 	var old_layer := body.collision_layer
 	body.collision_layer = 0
 	body.visible = false
+	if body.get_meta("stay_broken", false):   # house windows stay broken
+		return
 	get_tree().create_timer(5.0).timeout.connect(func():
 		if is_instance_valid(body):
 			body.collision_layer = old_layer

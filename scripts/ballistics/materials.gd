@@ -22,6 +22,17 @@ const TABLE := {
 	"drywall_partition": {gel_per_mm = 0.22, ricochet = 0.0, hard = false, clogs = true, deflect = 3.0, fx = "dust", color = Color(0.92, 0.92, 0.9)},
 	"gel": {gel_per_mm = 1.0, ricochet = 0.0, hard = false, clogs = false, deflect = 0.5, fx = "flesh", color = Color(0.9, 0.75, 0.5)},
 	"flesh": {gel_per_mm = 1.0, ricochet = 0.0, hard = false, clogs = false, deflect = 2.0, fx = "flesh", color = Color(0.45, 0.05, 0.05)},
+	# --- House construction and contents (averaged over the whole thickness, air gaps included).
+	"exterior_sheathing": {gel_per_mm = 0.3, ricochet = 0.0, hard = false, clogs = true, deflect = 3.0, fx = "wood", color = Color(0.85, 0.82, 0.72)},  # vinyl siding + OSB + batts
+	"hollow_door": {gel_per_mm = 0.5, ricochet = 4.0, hard = false, clogs = true, deflect = 3.0, fx = "wood", color = Color(0.85, 0.8, 0.7)},     # two 1/8 in hardboard skins
+	"solid_door": {gel_per_mm = 2.2, ricochet = 6.0, hard = false, clogs = true, deflect = 3.0, fx = "wood", color = Color(0.6, 0.45, 0.3)},
+	"appliance": {gel_per_mm = 0.3, ricochet = 15.0, hard = true, clogs = false, deflect = 5.0, fx = "spark", color = Color(0.9, 0.88, 0.8)},   # sheet-steel box, insulation, contents
+	"crt": {gel_per_mm = 1.5, ricochet = 10.0, hard = true, clogs = false, deflect = 6.0, fx = "glass", color = Color(0.3, 0.3, 0.32)},
+	"upholstery": {gel_per_mm = 0.12, ricochet = 0.0, hard = false, clogs = true, deflect = 4.0, fx = "dust", color = Color(0.8, 0.75, 0.7)},
+	"mattress": {gel_per_mm = 0.08, ricochet = 0.0, hard = false, clogs = true, deflect = 4.0, fx = "dust", color = Color(0.9, 0.9, 0.88)},
+	"cabinet": {gel_per_mm = 0.45, ricochet = 4.0, hard = false, clogs = true, deflect = 3.0, fx = "wood", color = Color(0.7, 0.55, 0.33)},
+	"porcelain": {gel_per_mm = 6.0, ricochet = 10.0, hard = true, clogs = false, deflect = 5.0, fx = "dust", color = Color(0.95, 0.95, 0.93)},
+	"car": {gel_per_mm = 0.3, ricochet = 20.0, hard = true, clogs = false, deflect = 6.0, fx = "spark", color = Color(0.8, 0.8, 0.85)},            # door skins, glass, seats
 	"dummy": {gel_per_mm = 1.0, ricochet = 0.0, hard = false, clogs = false, deflect = 2.0, fx = "dummy", color = Color(0.85, 0.7, 0.4)},
 }
 

@@ -52,6 +52,10 @@ var _spring: SpringArm3D
 var tp_camera: Camera3D
 var viewmodel: Viewmodel
 var firearm: Firearm
+var knife: Knife
+var active_weapon := "pistol"   ## "pistol" or "knife"; Y switches.
+var _pistol_grips: Array[Node3D] = []
+var _knife_grip: Node3D
 var _tp_weapon: Node3D
 var _recoil_recover := 0.0  ## Degrees of muzzle climb still to settle.
 
@@ -136,6 +140,12 @@ func _build() -> void:
 	add_child(firearm)
 	firearm.register_weapon(viewmodel.weapon, Viewmodel.LAYER)
 	firearm.register_weapon(_tp_weapon, PLAYER_MODEL_LAYER)
+	_pistol_grips = [character.grip_point, character.grip_right, character.grip_left]
+
+	knife = Knife.new()
+	knife.player = self
+	add_child(knife)
+	_knife_grip = knife.build(fp_camera, head, Viewmodel.LAYER, PLAYER_MODEL_LAYER)
 
 
 # ---------------------------------------------------------------- input
@@ -165,18 +175,44 @@ func _unhandled_input(event: InputEvent) -> void:
 		shoulder = -shoulder
 	elif event.is_action_pressed("crouch"):
 		_set_crouch(not crouching)
+	elif event.is_action_pressed("switch_weapon"):
+		switch_weapon()
 	elif event.is_action_pressed("interact"):
 		var target := interact_target()
 		if target and target.has_method("use"):
 			target.use(self)
 
 
-## Everything you carry: worn gear, what's in it, and the pistol.
+## Everything you carry: worn gear, what's in it, the pistol and the knife.
 func carried_weight() -> float:
 	var kg := character.equipment.total_weight()
 	if firearm:
 		kg += firearm.carried_weight()
+	if knife:
+		kg += knife.blade.weight_kg
 	return kg
+
+
+## Pistol <-> Ka-Bar (Y). Not mid-reload or mid-swing.
+func switch_weapon(to := "") -> void:
+	if to == "":
+		to = "knife" if active_weapon == "pistol" else "pistol"
+	if to == active_weapon or (firearm and firearm.reloading) or (knife and knife.busy() and knife.phase != Knife.Phase.DRAW):
+		return
+	active_weapon = to
+	var pistol := to == "pistol"
+	viewmodel.visible = pistol
+	_tp_weapon.visible = pistol
+	knife.set_active(not pistol)
+	if pistol:
+		character.pose_mode = CharacterModel.PoseMode.PISTOL
+		character.grip_point = _pistol_grips[0]
+		character.grip_right = _pistol_grips[1]
+		character.grip_left = _pistol_grips[2]
+	else:
+		character.pose_mode = CharacterModel.PoseMode.KNIFE
+		character.grip_right = _knife_grip
+	_apply_view()
 
 
 ## Nearest thing you can use with A (container or mirror), within reach in front of you.
@@ -275,7 +311,7 @@ func _process(delta: float) -> void:
 	character.move_speed = Vector2(velocity.x, velocity.z).length()
 	character.crouch = move_toward(character.crouch, 1.0 if crouching else 0.0, delta * 5.0)
 
-	var target_fov := fov_aim * Settings.fov / 75.0 if aiming else Settings.fov
+	var target_fov := fov_aim * Settings.fov / 75.0 if aiming and active_weapon == "pistol" else Settings.fov
 	fp_camera.fov = lerpf(fp_camera.fov, target_fov, minf(1.0, delta * 12.0))
 	tp_camera.fov = Settings.fov
 

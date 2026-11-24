@@ -153,6 +153,8 @@ godot --headless --fixed-fps 60 -s tools/tests/loot_test.gd       # drop/pick up
 godot --headless --fixed-fps 60 -s tools/tests/ragdoll_test.gd    # body + gear mass, flinch, FMJ vs JHP push, ragdolls settle, corpses take hits
 godot --headless --fixed-fps 60 -s tools/tests/blood_test.gd      # wound bleed rates, arterial bleeds, clotting, bleeding out, blood decals
 godot --headless --fixed-fps 60 -s tools/tests/wounded_test.gd    # limp, limp arm, clutching wounds, hunching, going down, shock
+godot --headless --fixed-fps 60 -s tools/tests/knife_test.gd      # Ka-Bar: switching, stab/slash wounds, clothing, blade blood, spurts
+godot --headless --fixed-fps 60 -s tools/tests/shoot_house_test.gd # house: rooms, doors, walls vs bullets, windows
 ```
 
 ## Bodies and hit reactions
@@ -176,3 +178,20 @@ Shot but alive, people show it (CharacterModel `hurt`/`pain`/`shock`/`kneel`/`si
 - **Pain:** spikes with each hit, then settles: fast breathing and trembling.
 - **Blood loss (shock):** skin goes pale and the head droops. They sink to a knee, then to the floor, before bleeding out.
 - `DamageModel.mobility()` and `steadiness()` give move-speed and aim penalties for the AI (and the player later).
+
+## Ka-Bar and blade wounds
+
+Y swaps between the 1911 and a USMC Ka-Bar (tools/blender/kabar_build.py: 7 in clip-point blade, 1.5 in wide, stacked leather handle; 1 lb with the sheath). With the knife out, R2 slashes (alternating forehand and backhand) and L2 + R2 stabs. Each attack has a wind-up, a short live window and a recovery. While the blade moves, rays sweep its arc (`Melee`).
+
+- **Stab:** a 60 J thrust drives the blade up to its full 7 in. Clothing soaks some of it up (`Melee.CUT_RESIST`: T-shirt 2 J, jacket 8 J, vest 6 J). Ribs can deflect the point and the skull stops it. Damage and the chance of hitting a vessel or organ grow with depth: a full-depth chest stab does about 36 HP and opens a vessel close to half the time.
+- **Slash:** about 3/4 in deep in bare skin along a 3½–7½ in cut, but only a scratch through a jacket. It does little damage (10–14 HP) but bleeds freely and is slow to clot. It's worst across the throat, forearms and wrists.
+- **Blood:** a stab leaves a slit and gushes as the blade comes out. A slash leaves a long cut and throws blood off along the swing onto walls and the floor. Arterial bleeds (gunshot or blade) spurt with the heartbeat. The blade gets bloodier with each hit.
+
+## Shoot house (test level)
+
+Main menu > "Play (shoot house)". It's a 1995 suburban ranch house built in code (`scripts/levels/shoot_house.gd` on `LevelKit`): 64 x 32 ft with an attached two-car garage, a lawn, driveway, street, a fenced back yard and a deck.
+
+- **Rooms:** kitchen, dining nook, foyer, living room, laundry, two bedrooms and an office along the front; a hallway; then the family room (wood paneling, brick fireplace), a bathroom, a kid's room and the master bedroom with its own bathroom. Builder-grade 1995 details: popcorn ceilings, beige and mauve carpet, almond appliances, oak cabinets, a geese wallpaper border, floral sofas and CRT TVs.
+- **Construction is real to bullets:** interior walls are 2x4 and drywall (a .45 goes through), exterior walls are siding, OSB, batts and drywall, interior doors are hollow-core and the front door is solid. Brick, porcelain, appliance steel and the car stop or slow rounds by their material. Windows break and stay broken.
+- **Doors:** A opens a door away from you and closes it.
+- **Performance:** static meshes are merged per material in 5 m cells (`LevelKit.batch_meshes`), about 600 draw calls down to about 200.
