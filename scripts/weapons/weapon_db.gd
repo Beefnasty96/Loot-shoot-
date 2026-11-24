@@ -14,7 +14,8 @@ extends RefCounted
 ##   caliber, action (semi/auto/bolt/pump), modes, rpm, barrel_in (inches; the
 ##   ammo data is measured from a 5 in pistol barrel), weight (kg, bare), size
 ##   (grid squares), ergo (0-100: aim speed, sway), recoil (1.0 = a 1911 with ball),
-##   moa (mechanical accuracy), scene (model), sound, slots.
+##   moa (mechanical accuracy), scene (model), sound, slots, rig (how it's handled
+##   and animated: see RIG_DEFAULTS).
 ## Slot fields: accepts (part types or a magazine family), required (gun won't work
 ##   without it; can only be swapped), default (part id it comes with), at
 ##   (attach point in gun space, for parts modelled around their own mount), parent
@@ -39,6 +40,31 @@ const WEAPONS := {
 			sights = {accepts = ["sights_1911"], required = true, default = "sights_1911_gi", parent = "Slide"},
 			mount = {accepts = ["mount_1911"]},
 			magazine = {accepts = ["mag_1911"], magazine = true},
+		},
+	},
+	"m4a1": {
+		name = "M4A1 carbine", kind = "rifle", slot = "primary", caliber = "5.56 NATO", action = "auto", modes = ["semi", "auto"], rpm = 800,
+		barrel_in = 14.5, weight = 2.95, size = Vector2i(5, 2), ergo = 52, recoil = 1.0, moa = 2.0,
+		scene = "res://assets/weapons/m4a1/m4a1.glb", sound = "shot_556", value = 1800,
+		description = "14.5 in select-fire carbine: flat-top upper, quad rail, folding rear sight. Hold Y for semi / auto.",
+		rig = {
+			anim = "rifle", travel = 0.075, cycle = 0.062, reload = 2.3, reload_empty = 2.7, mag_axis = Vector3(0.0, -0.99, -0.12),
+			mag_drop = 0.26, zero_m = 45.72, zero_ammo = "556_1_m193", casing = Vector2(0.0048, 0.045), flash = 0.16,
+			recoil_k = 0.42, view_kick = 0.12, bloom = 0.22, sight_hold = 0.06, hip_spread = 1.2, aim_fov = 55.0, auto_climb = 0.85,
+			view = {
+				hip = Vector3(0.118, -0.13, -0.215), hip_rot = Vector3(1.5, 2.5, -5.0),
+				aim = Vector3(0.0, -0.064, -0.209), sprint = Vector3(0.06, -0.16, -0.24), sprint_rot = Vector3(-24.0, 40.0, 14.0),
+				reload_pos = Vector3(-0.05, 0.06, -0.05), reload_rot = Vector3(8.0, 12.0, -38.0), kick_pos = Vector3(0.0, 0.004, 0.035), kick_rot = 5.0,
+				arms = "res://assets/viewmodels/arms/arms_rifle.glb",
+			},
+			tp = {pos = Vector3(0.08, -0.12, -0.33), grip = Vector3(0.0, -0.0765, 0.105), right = Vector3(0.016, -0.084, 0.142), left = Vector3(-0.045, -0.042, -0.18)},
+		},
+		slots = {
+			handguard = {accepts = ["handguard_m4"], required = true, default = "rail_m4_quad"},
+			stock = {accepts = ["stock_m4"], required = true, default = "stock_m4_6pos"},
+			rear_sight = {accepts = ["rsight_m4"], required = true, default = "buis_m4_folding"},
+			muzzle = {accepts = ["muzzle_556"], required = true, default = "fh_a2"},
+			magazine = {accepts = ["stanag"], magazine = true},
 		},
 	},
 	"kabar": {
@@ -78,13 +104,59 @@ const PARTS := {
 		scene = "res://assets/weapons/parts/rail_1911.glb", value = 45,
 		description = "Clamps under the frame. Adds a rail for a light.",
 		slots = {tactical = {accepts = ["tactical_rail"], at = Vector3(0.0, -0.036, -0.065)}}},
+	# --- M4 furniture (part of the base model for now; the slots are there so optics,
+	#     handguards, stocks and muzzle devices can be swapped in later).
+	"rail_m4_quad": {name = "M4 quad rail (RIS)", type = "handguard_m4", weight = 0.29, scene = "", size = Vector2i(3, 1),
+		description = "Four Picatinny rails round the barrel. Takes a light underneath.",
+		slots = {tactical = {accepts = ["tactical_rail"], at = Vector3(0.0, -0.028, -0.205)}}},
+	"stock_m4_6pos": {name = "M4 six-position stock", type = "stock_m4", weight = 0.23, scene = "", size = Vector2i(2, 1),
+		description = "Collapsible carbine stock, set at the fourth notch."},
+	"buis_m4_folding": {name = "Folding rear sight (BUIS)", type = "rsight_m4", weight = 0.07, scene = "", size = Vector2i(1, 1),
+		description = "Flip-up rear aperture on the flat-top rail, lined up with the A2 front sight post."},
+	"fh_a2": {name = "A2 birdcage flash hider", type = "muzzle_556", weight = 0.06, scene = "", size = Vector2i(1, 1),
+		description = "Slotted flash hider: keeps the flash out of your eyes, not quieter."},
 	"light_m3": {name = "Weapon light (M3-style)", type = "tactical_rail", weight = 0.12, ergo = -3, size = Vector2i(1, 1), on_mount = true,
 		light = {range = 28.0, energy = 7.0, angle = 20.0}, scene = "res://assets/weapons/parts/light_m3.glb", value = 150,
 		description = "D-pad down turns it on. Lights up dark rooms - and you."},
 }
 
 ## Magazines (items in ItemDB with mag_family): family -> calibre, for reference.
-const MAG_FAMILIES := {"mag_1911": ".45 ACP"}
+const MAG_FAMILIES := {"mag_1911": ".45 ACP", "stanag": "5.56 NATO"}
+
+## How a gun is handled and animated (a weapon's `rig` overrides these; the 1911's are the defaults).
+##   anim: "pistol" (Slide/Hammer) or "rifle" (Bolt carrier, ChargingHandle, DustCover, Selector)
+##   travel: m the slide/bolt runs back; cycle: s for one cycle; reload(_empty): s
+##   mag_axis / mag_drop: direction (gun space) and distance the magazine comes out
+##   zero_m / zero_ammo: where the sights cross the bullet path, for which load
+##   casing: (radius, length) m; flash: muzzle flash size m
+##   recoil_k: kick per unit of bullet momentum; view_kick: viewmodel jolt; bloom: spread added per shot
+##   sight_hold: extra spread aimed (degrees); aim_fov: aimed field of view; auto_climb: muzzle climb kept in auto
+##   view: first-person poses (gun-model origin relative to the camera) and arms model
+##   tp: third-person hold: model offset from the head, and hand markers (gun space)
+const RIG_DEFAULTS := {
+	anim = "pistol", travel = 0.032, cycle = 0.075, reload = 1.7, reload_empty = 2.2, mag_axis = Vector3(0.0, -0.951, 0.309),
+	mag_drop = 0.14, zero_m = 22.86, zero_ammo = "45_1_fmj230", casing = Vector2(0.006, 0.023), flash = 0.09,
+	recoil_k = 0.72, view_kick = 1.0 / 3.8, bloom = 0.45, sight_hold = 0.12, hip_spread = 1.6, aim_fov = 50.0, auto_climb = 1.0,
+	view = {
+		hip = Vector3(0.072, -0.06, -0.215), hip_rot = Vector3(2.0, 4.0, -3.0), aim = Vector3(0.0, -0.0202, -0.40),
+		sprint = Vector3(0.05, -0.15, -0.21), sprint_rot = Vector3(-38.0, 22.0, 12.0),
+		reload_pos = Vector3(-0.02, 0.025, 0.03), reload_rot = Vector3(18.0, -10.0, 32.0), kick_pos = Vector3(0.0, 0.01, 0.05), kick_rot = 14.0,
+		arms = "res://assets/viewmodels/arms/arms.glb",
+	},
+	tp = {pos = Vector3(0.1, -0.3, -0.45), grip = Vector3(0.0, -0.064, 0.057), right = Vector3(0.006, -0.085, 0.125), left = Vector3(-0.035, -0.1, 0.105)},
+}
+
+
+## A weapon's rig with the defaults filled in.
+static func rig(weapon_id: String) -> Dictionary:
+	var r := RIG_DEFAULTS.duplicate(true)
+	var own: Dictionary = weapon(weapon_id).get("rig", {})
+	for k: String in own:
+		if own[k] is Dictionary and r.get(k) is Dictionary:
+			(r[k] as Dictionary).merge(own[k], true)
+		else:
+			r[k] = own[k]
+	return r
 
 
 static func weapon(id: String) -> Dictionary:
@@ -178,10 +250,14 @@ static func stats(gun: InvItem) -> Dictionary:
 	return st
 
 
-## Muzzle velocity multiplier for a barrel length (ammo data is from a 5 in barrel).
-## Pistol calibres gain roughly 1.8% per inch around that length.
-static func velocity_factor(barrel_in: float) -> float:
-	return clampf(1.0 + 0.018 * (barrel_in - 5.0), 0.8, 1.35)
+## Muzzle velocity multiplier for a barrel length, for a calibre's standard load.
+## Each load knows its own reference barrel and fps-per-inch (AmmoType.velocity_factor):
+## pistol calibres gain ~1.8% per inch around 5 in, 5.56 loses ~35 fps per inch under 20 in.
+static func velocity_factor(barrel_in: float, caliber := ".45 ACP") -> float:
+	var loads := AmmoDB.all_for(caliber)
+	if loads.is_empty():
+		return 1.0
+	return loads[0].velocity_factor(barrel_in)
 
 
 # ------------------------------------------------------------------ models

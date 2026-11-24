@@ -312,7 +312,7 @@ func _mag8() -> InvItem:
 
 ## Supply crate (A to search) and a mirror (A for a new look) next to spawn.
 func _build_supply() -> void:
-	var crate := LootContainer.new("Supply crate", 12, 14)
+	var crate := LootContainer.new("Supply crate", 14, 16)
 	crate.position = Vector3(-2.6, 0.45, 17.2)
 	crate.set_meta("material", "wood_crate")
 	var mesh := MeshInstance3D.new()
@@ -337,8 +337,16 @@ func _build_supply() -> void:
 	for a in AmmoDB.all_for(".45 ACP"):
 		crate.add(InvItem.rounds(a.id, 50))
 		crate.add(InvItem.rounds(a.id, 50))
+	# 5.56 for the M4: two loaded 30-rounders of each load, empties, and loose rounds.
+	for a in AmmoDB.all_for("5.56 NATO"):
+		for i in 2:
+			crate.add(InvItem.magazine(a, 30, "mag_stanag"))
+	for i in 2:
+		crate.add(InvItem.magazine(null, 0, "mag_stanag"))
+	for a in AmmoDB.all_for("5.56 NATO"):
+		crate.add(InvItem.rounds(a.id, 50))
 	# Gun parts bench: attachments for the 1911, 8-round mags and a spare pistol.
-	var bench := LootContainer.new("Gun parts", 10, 8)
+	var bench := LootContainer.new("Gun parts", 10, 10)
 	bench.position = Vector3(-4.6, 0.45, 17.2)
 	bench.set_meta("material", "wood_crate")
 	var bm := MeshInstance3D.new()
@@ -359,6 +367,7 @@ func _build_supply() -> void:
 	for i in 3:
 		bench.add(_mag8())
 	bench.add(InvItem.pistol(AmmoDB.get_ammo("45_1_fmj230"), 7, true))
+	bench.add(InvItem.rifle(AmmoDB.get_ammo("556_2_m855"), 30, false))
 	for id in ["gpu", "medkit", "water", "ifak", "painkillers", "painkillers", "beans", "cash", "cash", "cash", "gold", "gold", "docs"]:
 		crate.add(InvItem.create(id))
 

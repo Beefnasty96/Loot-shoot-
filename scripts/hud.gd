@@ -315,7 +315,7 @@ func _process(_delta: float) -> void:
 		_mag_check.text = ""
 	elif player.active_weapon == "knife":
 		_ammo_big.text = "KA-BAR"
-		var lines := ["R2: slash     L2 + R2: stab", "Y: back to the 1911"]
+		var lines := ["R2: slash     L2 + R2: stab", "Y: next weapon"]
 		if player.knife.blood > 0.05:
 			lines.push_front("Blade %s" % ("bloody" if player.knife.blood > 0.5 else "stained"))
 		_ammo_info.text = "\n".join(lines)
@@ -329,11 +329,13 @@ func _process(_delta: float) -> void:
 		lines.append("Mag: %s" % (f.mag_ammo.display_name if f.has_mag else "none"))
 		lines.append("Next mag:  <  %s  >  (%d spare)" % [f.next_ammo().display_name, f.spare_count(f.next_ammo())])
 		if f.gun:
-			lines.push_front(f.gun.def.display_name + ("   [LIGHT ON]" if f.light_on else ""))
+			var modes: Array = WeaponDB.weapon(f.gun.def.weapon_id).get("modes", ["semi"])
+			var sel := ("   [%s]" % f.mode.to_upper()) if modes.size() > 1 else ""
+			lines.push_front(f.gun.def.display_name + sel + ("   [LIGHT ON]" if f.light_on else ""))
 		if f.reloading:
 			lines.push_front("RELOADING")
 		elif f.slide_locked:
-			lines.push_front("SLIDE LOCKED - reload")
+			lines.push_front(("BOLT" if f.rig.anim == "rifle" else "SLIDE") + " LOCKED - reload")
 		_ammo_info.text = "\n".join(lines)
 		_mag_check.text = f.notice if f.notice_time > 0.0 else (f.mag_check_text if f.mag_check_time > 0.0 else "")
 	_update_body()

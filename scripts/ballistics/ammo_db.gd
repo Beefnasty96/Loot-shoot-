@@ -1,7 +1,8 @@
 class_name AmmoDB
 extends RefCounted
 ## Ammunition catalogue. Figures are typical factory / published gel-test values
-## for a 5" barrel (sources noted per load). Add new calibers the same way.
+## (sources noted per load): .45 ACP from a 5" barrel, 5.56 NATO from a 20" barrel
+## (a 14.5" M4 loses ~35 fps per inch of that). Add new calibers the same way.
 
 static var _cache: Dictionary = {}
 
@@ -66,6 +67,43 @@ static func _ensure() -> void:
 		expanded_in = 0.75, expand_min_fps = 300.0, gel_expanded_in = 8.0, gel_unexpanded_in = 10.0,
 		disintegrates_on_hard = true, hard_barrier_factor = 1.0, ricochet_factor = 0.0,
 		notes = "Breaks into powder on steel/masonry: no ricochets, no hard-barrier penetration."})
+
+
+	# ---------------------------------------------------------------- 5.56x45mm NATO
+	# Rifle bullets behave differently from pistol bullets: they go in nose-first
+	# for 3-5" ("the neck"), then turn sideways. If they are still fast enough when
+	# they turn, the jacket breaks at the cannelure and the bullet fragments - a
+	# much bigger wound that stops sooner. Slow (long range, short barrel, through a
+	# wall) and they just tumble. A thin arm or a grazing hit never gets past the
+	# neck: a small "icepick" hole straight through. (Fackler/WDTL gel work.)
+
+	# 7. M193 ball: 55gr FMJBT, 3240 fps / 20", G1 ~.243. Yaws at ~4.7" (12 cm) and
+	#    fragments reliably above ~2700 fps impact (inside ~150 m from an M4).
+	_add({id = "556_1_m193", display_name = "M193 55gr ball", short_name = "M193", caliber = "5.56 NATO",
+		construction = T.FMJ, mass_grains = 55.0, muzzle_fps = 3240.0, reference_barrel_in = 20.0, fps_per_inch = 35.0,
+		bc_g1 = 0.243, diameter_in = 0.224, gel_unexpanded_in = 11.0, gel_nose_in = 90.0, hard_ref_in = 30.0,
+		yaw_neck_in = 4.7, frag_min_fps = 2700.0, gel_frag_in = 8.0, frag_wound_ratio = 2.7, tumble_wound_ratio = 1.7,
+		frag_retained = 0.55, hard_barrier_factor = 1.0, ricochet_factor = 1.1,
+		notes = "Fast, light, fragments violently up close. Fragmentation range shrinks fast with a short barrel. Mild steel to ~1/4 in."})
+
+	# 8. M855 / SS109 "green tip": 62gr with a 7gr steel penetrator, 3100 fps / 20", G1 ~.304.
+	#    Yaws later (~5") and less predictably; fragments above ~2500 fps.
+	#    Steel tip punches 3.5 mm mild steel at 1300 m (the NATO spec plate).
+	_add({id = "556_2_m855", display_name = "M855 62gr green tip", short_name = "M855", caliber = "5.56 NATO",
+		construction = T.PENETRATOR, mass_grains = 62.0, muzzle_fps = 3100.0, reference_barrel_in = 20.0, fps_per_inch = 35.0,
+		bc_g1 = 0.304, diameter_in = 0.224, gel_unexpanded_in = 13.0, gel_nose_in = 100.0, hard_ref_in = 36.0,
+		yaw_neck_in = 5.0, frag_min_fps = 2500.0, gel_frag_in = 9.0, frag_wound_ratio = 2.3, tumble_wound_ratio = 1.6,
+		frag_retained = 0.65, hard_barrier_factor = 0.65, ricochet_factor = 0.9,
+		notes = "Steel penetrator: much better through steel and car bodies. Flies flatter. Inconsistent fragmentation."})
+
+	# 9. M856 tracer: 63.7gr, ~3050 fps / 20", orange tip. Trace visible to ~800 m.
+	#    Lead-light base full of tracer compound: tends to yaw and break up less.
+	_add({id = "556_3_m856", display_name = "M856 63.7gr tracer", short_name = "M856", caliber = "5.56 NATO",
+		construction = T.FMJ, mass_grains = 63.7, muzzle_fps = 3050.0, reference_barrel_in = 20.0, fps_per_inch = 35.0,
+		bc_g1 = 0.29, diameter_in = 0.224, gel_unexpanded_in = 12.0, gel_nose_in = 90.0, hard_ref_in = 32.0,
+		yaw_neck_in = 5.5, frag_min_fps = 2750.0, gel_frag_in = 9.0, frag_wound_ratio = 2.0, tumble_wound_ratio = 1.6,
+		frag_retained = 0.7, hard_barrier_factor = 1.0, ricochet_factor = 1.0, tracer = true, tracer_range_m = 800.0,
+		notes = "Glowing trail shows where your rounds go - and where you are. Burns out at ~800 m."})
 
 
 static func _add(fields: Dictionary) -> void:

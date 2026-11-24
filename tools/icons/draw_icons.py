@@ -126,3 +126,20 @@ d.polygon(S(20, 86, 172, 86, 182, 110, 10, 110), fill=(95, 97, 103), outline=(20
 for r in range(3):
     d.rectangle(S(36 + r * 4, 90 + r * 6, 156 - r * 4, 93 + r * 6), fill=(60, 62, 66))
 save(img, "laptop")
+
+# ---------------------------------------------------------------- 5.56 NATO (3 slim bottlenecked cartridges)
+TIPS = {"m193": None, "m855": (60, 140, 60), "m856": (220, 110, 30)}
+for key, tip in TIPS.items():
+    img, d = canvas(1, 1)
+    for i, x in enumerate((16, 32, 48)):
+        top = 6 + (i % 2) * 4
+        # case body, shoulder, neck
+        d.rectangle(S(x - 5, top + 24, x + 5, 58), fill=(205, 165, 70), outline=(90, 70, 20), width=SS)
+        d.polygon(S(x - 5, top + 24, x + 5, top + 24, x + 3, top + 19, x - 3, top + 19), fill=(205, 165, 70), outline=(90, 70, 20))
+        d.rectangle(S(x - 3, top + 14, x + 3, top + 19), fill=(205, 165, 70))
+        d.rectangle(S(x - 5, 54, x + 5, 58), fill=(170, 130, 50))
+        # copper bullet: long ogive
+        d.polygon(S(x - 3, top + 14, x + 3, top + 14, x + 2, top + 6, x, top, x - 2, top + 6), fill=(184, 115, 51), outline=(60, 40, 20))
+        if tip:
+            d.polygon(S(x - 2, top + 6, x + 2, top + 6, x, top), fill=tip)
+    save(img, "ammo_" + key)

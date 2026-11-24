@@ -195,8 +195,49 @@ def parts():
     shutil.copy(os.path.join(OUT, "barrel_1911_threaded.png"), os.path.join(OUT, "barrel_1911_gi.png"))
 
 
+def m4():
+    """The M4A1 (5x2), its STANAG magazine (1x2) and its built-in furniture, from m4a1.blend."""
+    def load(names):
+        sc = reset()
+        with bpy.data.libraries.load(os.path.join(ROOT, "assets", "weapons", "m4a1", "m4a1.blend")) as (src, dst):
+            dst.objects = [n for n in src.objects if names is None or n in names]
+        meshes = []
+        for o in dst.objects:
+            if o is None:
+                continue
+            sc.collection.objects.link(o)
+            if o.type == "MESH":
+                meshes.append(o)
+        bpy.context.view_layer.update()
+        for o in meshes:
+            mw = o.matrix_world.copy()
+            o.parent = None
+            o.matrix_world = mw
+        return sc, meshes
+    sc, meshes = load(None)
+    frame_and_render(sc, meshes, (1, 0.0, 0.06), (5, 2), os.path.join(OUT, "m4a1.png"))
+    for name, out, fp, view in [("Magazine", "mag_stanag", (1, 2), (1, 0.1, 0.05)),
+                                ("Handguard", "rail_m4_quad", (3, 1), (1, 0.2, 0.3)),
+                                ("Stock", "stock_m4_6pos", (2, 1), (1, 0.1, 0.1)),
+                                ("RearSight", "buis_m4_folding", (1, 1), (1, -0.6, 0.3))]:
+        sc, meshes = load([name])
+        frame_and_render(sc, meshes, view, fp, os.path.join(OUT, out + ".png"))
+    # The flash hider is part of the barrel mesh: crop it out of a barrel render.
+    sc, meshes = load(["Barrel"])
+    import bmesh
+    for o in meshes:
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.y < 0.404], context="VERTS")
+        bm.to_mesh(o.data)
+        bm.free()
+    frame_and_render(sc, meshes, (1, 0.3, 0.2), (1, 1), os.path.join(OUT, "fh_a2.png"))
+
+
 if __name__ == "__main__":
-    if len(sys.argv) > 2 and sys.argv[2] == "weapons":
+    if len(sys.argv) > 2 and sys.argv[2] == "m4":
+        m4()
+    elif len(sys.argv) > 2 and sys.argv[2] == "weapons":
         weapons()
         parts()
     else:

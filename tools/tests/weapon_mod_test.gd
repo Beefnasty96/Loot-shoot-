@@ -148,12 +148,12 @@ func _process(_d: float) -> bool:
 		var g = eq.disarm("sidearm")
 		var w = load("res://scripts/inventory/world_item.gd").spawn(g, p.global_position + Vector3(0, 0, -1.0), rs)
 		set_meta("dropped", w)
-		check(p.active_weapon == "knife", "with the holster empty you switch to the knife")
+		check(p.active_weapon == "rifle", "with the holster empty you switch to the M4 on your sling")
 	if f == 14:
 		var w = get_meta("dropped")
 		check(w.find_child("M1911", true, false) != null, "a gun on the floor lies there as its model")
 		w.use(p)
-		check(p.character.equipment.get_weapon("sidearm") != null and p.active_weapon == "knife", "picking it up puts it straight back in the holster")
+		check(p.character.equipment.get_weapon("sidearm") != null and p.active_weapon == "rifle", "picking it up puts it straight back in the holster")
 		p.switch_weapon("pistol")
 		check(p.active_weapon == "pistol", "and Y draws it again")
 		# Hearing: an enemy 20 m away doesn't hear a suppressed shot, does hear an open one.

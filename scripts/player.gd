@@ -50,8 +50,17 @@ var head: Node3D             ## Pitch + lean pivot at eye height.
 var fp_camera: Camera3D
 var _spring: SpringArm3D
 var tp_camera: Camera3D
-var viewmodel: Viewmodel
-var firearm: Firearm
+## The gun you're using: the primary when the rifle is drawn, otherwise the holster's.
+var firearm: Firearm:
+	get:
+		return primary_fa if active_weapon == "rifle" and primary_fa else sidearm_fa
+var sidearm_fa: Firearm               ## Holster.
+var primary_fa: Firearm               ## Primary (long gun).
+var firearms: Array[Firearm] = []
+## First-person arms + gun of the current firearm.
+var viewmodel: Viewmodel:
+	get:
+		return firearm.viewmodel if firearm else null
 var knife: Knife
 var vitals: Vitals
 var hitboxes: Array[Hitbox] = []
@@ -61,10 +70,9 @@ var model: CharacterModel:     ## Same as `character` (Melee and others look for
 var med_notice := ""
 var med_notice_time := 0.0
 signal player_died(cause: String)
-var active_weapon := "pistol"   ## "pistol" or "knife"; Y switches.
-var _pistol_grips: Array[Node3D] = []
+var active_weapon := "pistol"   ## "rifle", "pistol", "knife" or "none"; Y switches, hold Y = fire selector.
 var _knife_grip: Node3D
-var _tp_weapon: Node3D
+var _y_hold := -1.0
 var _recoil_recover := 0.0  ## Degrees of muzzle climb still to settle.
 
 
@@ -97,7 +105,8 @@ func _build() -> void:
 	for id in ["tshirt", "pants", "boots", "gloves"]:
 		var colour := {"tshirt": 3, "pants": 1, "boots": 0, "gloves": 0}[id] as int
 		character.equipment.equip(GearInstance.create(id, colour))
-	# Starting kit: two spare magazines and some painkillers in your pants pockets.
+	# Starting kit: two spare magazines and some painkillers in your pants pockets,
+	# an M4 on the sling (30 rounds of M193, one chambered).
 	var pockets: Array = character.equipment.get_slot("legs").grids
 	pockets[0].place(InvItem.magazine(AmmoDB.get_ammo("45_1_fmj230"), 7), Vector2i.ZERO)
 	pockets[1].place(InvItem.magazine(AmmoDB.get_ammo("45_2_jhp230"), 7), Vector2i.ZERO)
@@ -106,6 +115,7 @@ func _build() -> void:
 	# Weapons are items in their own slots: a stock 1911 (loaded, one chambered) and a Ka-Bar.
 	character.equipment.arm(InvItem.pistol(AmmoDB.get_ammo("45_1_fmj230"), 7, true))
 	character.equipment.arm(InvItem.create("kabar"))
+	character.equipment.arm(InvItem.rifle(AmmoDB.get_ammo("556_1_m193"), 29, true))
 	hitboxes = Npc.build_hitboxes(character, self)
 
 	head = Node3D.new()
@@ -134,34 +144,26 @@ func _build() -> void:
 	tp_camera.cull_mask = 0xFFFFF & ~Viewmodel.LAYER
 	_spring.add_child(tp_camera)
 
-	# First-person arms + gun on the first-person camera.
-	viewmodel = Viewmodel.new()
-	viewmodel.player = self
-	fp_camera.add_child(viewmodel)
-
-	# Third-person stand-in: the same pistol held out in front, following your aim.
-	_tp_weapon = (load("res://assets/weapons/m1911/m1911.glb") as PackedScene).instantiate()
-	_tp_weapon.position = Vector3(0.1, -0.3, -0.45)
-	head.add_child(_tp_weapon)
-	_set_layers(_tp_weapon, PLAYER_MODEL_LAYER)
-	# Where the third-person body's hands go (pistol space: -Z forward).
-	character.grip_point = _marker(_tp_weapon, Vector3(0.0, -0.064, 0.057))
-	character.grip_right = _marker(_tp_weapon, Vector3(0.006, -0.085, 0.125))
-	character.grip_left = _marker(_tp_weapon, Vector3(-0.035, -0.1, 0.105))
-
-	firearm = Firearm.new()
-	firearm.player = self
-	add_child(firearm)
-	firearm.register_weapon(viewmodel.weapon, Viewmodel.LAYER)
-	firearm.register_weapon(_tp_weapon, PLAYER_MODEL_LAYER)
-	_pistol_grips = [character.grip_point, character.grip_right, character.grip_left]
+	# One Firearm per gun slot. Each builds its first-person viewmodel (on the
+	# first-person camera) and a third-person gun held out in front, following your aim.
+	sidearm_fa = Firearm.new()
+	sidearm_fa.name = "Sidearm"
+	sidearm_fa.attach(self, "sidearm", "pistol", fp_camera, head)
+	add_child(sidearm_fa)
+	primary_fa = Firearm.new()
+	primary_fa.name = "Primary"
+	primary_fa.attach(self, "primary", "rifle", fp_camera, head)
+	add_child(primary_fa)
+	firearms = [primary_fa, sidearm_fa]
 
 	knife = Knife.new()
 	knife.player = self
 	add_child(knife)
 	_knife_grip = knife.build(fp_camera, head, Viewmodel.LAYER, PLAYER_MODEL_LAYER)
-	firearm.bind(character.equipment.get_weapon("sidearm"))
+	sidearm_fa.bind(character.equipment.get_weapon("sidearm"))
+	primary_fa.bind(character.equipment.get_weapon("primary"))
 	character.equipment.weapon_changed.connect(_on_weapon_changed)
+	_set_weapon(active_weapon)
 
 	vitals = Vitals.new()
 	vitals.player = self
@@ -197,8 +199,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		shoulder = -shoulder
 	elif event.is_action_pressed("crouch"):
 		_set_crouch(not crouching)
-	elif event.is_action_pressed("switch_weapon"):
-		switch_weapon()
 	elif event.is_action_pressed("use_meds"):
 		_med_note(vitals.use_meds())
 	elif event.is_action_pressed("toggle_light"):
@@ -212,8 +212,6 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Everything you carry: worn gear, what's in it, the pistol and the knife.
 func carried_weight() -> float:
 	var kg := character.equipment.total_weight()
-	if firearm:
-		kg += firearm.carried_weight()
 	return kg
 
 
@@ -223,8 +221,9 @@ var _light_hold := -1.0
 ## Something went into or out of a weapon slot (inventory, pickup, swap).
 func _on_weapon_changed(slot: String) -> void:
 	var eq := character.equipment
-	if slot == "sidearm":
-		firearm.bind(eq.get_weapon("sidearm"))
+	for fa in firearms:
+		if fa.slot == slot and fa.gun != eq.get_weapon(slot):
+			fa.bind(eq.get_weapon(slot))
 	var avail := available_weapons()
 	if active_weapon != "none" and not (active_weapon in avail):
 		_set_weapon(avail[0] if not avail.is_empty() else "none")
@@ -263,7 +262,8 @@ func _on_died(cause: String) -> void:
 	ui_locked = true
 	sprinting = false
 	aiming = false
-	viewmodel.visible = false
+	for fa in firearms:
+		fa.set_drawn(false)
 	knife.view.visible = false
 	character.start_ragdoll(Vector3.ZERO, Vector3.ZERO, "")
 	view = View.THIRD
@@ -272,12 +272,14 @@ func _on_died(cause: String) -> void:
 	player_died.emit(cause)
 
 
-## Pistol <-> Ka-Bar (Y). Not mid-reload or mid-swing.
-## What you can draw: "pistol" (something in the holster), "knife" (something in the sheath).
-## Primary long guns slot in here when they arrive.
+## Rifle -> pistol -> Ka-Bar (Y). Not mid-reload or mid-swing.
+## What you can draw: "rifle" (something in the primary slot), "pistol" (holster),
+## "knife" (sheath).
 func available_weapons() -> Array[String]:
 	var out: Array[String] = []
 	var eq := character.equipment
+	if eq.get_weapon("primary"):
+		out.append("rifle")
 	if eq.get_weapon("sidearm"):
 		out.append("pistol")
 	if eq.get_weapon("melee"):
@@ -302,18 +304,20 @@ func switch_weapon(to := "") -> void:
 
 func _set_weapon(to: String) -> void:
 	active_weapon = to
-	var pistol := to == "pistol"
-	viewmodel.visible = pistol
-	_tp_weapon.visible = pistol
+	for fa in firearms:
+		fa.set_drawn(fa.serves == to)
 	if knife.active != (to == "knife"):
 		knife.set_active(to == "knife")
+	var fa := firearm
 	if to == "none":
 		character.pose_mode = CharacterModel.PoseMode.IDLE
-	elif pistol:
-		character.pose_mode = CharacterModel.PoseMode.PISTOL
-		character.grip_point = _pistol_grips[0]
-		character.grip_right = _pistol_grips[1]
-		character.grip_left = _pistol_grips[2]
+	elif (to == "pistol" or to == "rifle") and fa and fa.tp_grips.size() == 3:
+		character.pose_mode = CharacterModel.PoseMode.RIFLE if to == "rifle" else CharacterModel.PoseMode.PISTOL
+		character.grip_point = fa.tp_grips[0]
+		character.grip_right = fa.tp_grips[1]
+		character.grip_left = fa.tp_grips[2]
+	elif to != "knife":
+		character.pose_mode = CharacterModel.PoseMode.IDLE
 	else:
 		character.pose_mode = CharacterModel.PoseMode.KNIFE
 		character.grip_right = _knife_grip
@@ -378,12 +382,27 @@ func _process(delta: float) -> void:
 				Ballistics.debug_enabled = not Ballistics.debug_enabled
 				_light_hold = -1.0
 		else:
-			if active_weapon == "pistol" and not ui_locked:
+			if (active_weapon == "pistol" or active_weapon == "rifle") and not ui_locked:
 				if firearm.has_light():
 					firearm.toggle_light()
 				else:
 					_med_note("No light on this gun")
 			_light_hold = -1.0
+
+	# Y: tap = next weapon (on release), hold = fire selector.
+	if Input.is_action_just_pressed("switch_weapon") and not ui_locked:
+		_y_hold = 0.0
+	if _y_hold >= 0.0:
+		if Input.is_action_pressed("switch_weapon"):
+			_y_hold += delta
+			if _y_hold >= 0.4:
+				_y_hold = -1.0
+				if (active_weapon == "rifle" or active_weapon == "pistol") and not ui_locked and firearm.toggle_mode() == "":
+					switch_weapon()   # one-mode gun: holding Y just switches
+		else:
+			_y_hold = -1.0
+			if not ui_locked:
+				switch_weapon()
 
 	if _recoil_recover > 0.0:
 		var settle := minf(_recoil_recover, delta * 14.0)
@@ -436,7 +455,8 @@ func _process(delta: float) -> void:
 	character.move_speed = Vector2(velocity.x, velocity.z).length()
 	character.crouch = move_toward(character.crouch, 1.0 if crouching else 0.0, delta * 5.0)
 
-	var target_fov := fov_aim * Settings.fov / 75.0 if aiming and active_weapon == "pistol" else Settings.fov
+	var gun_drawn := active_weapon == "pistol" or active_weapon == "rifle"
+	var target_fov := float(firearm.rig.aim_fov) * Settings.fov / 75.0 if aiming and gun_drawn and firearm else Settings.fov
 	fp_camera.fov = lerpf(fp_camera.fov, target_fov, minf(1.0, delta * 12.0))
 	tp_camera.fov = Settings.fov
 

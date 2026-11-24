@@ -458,7 +458,7 @@ func _fire(aim_at: Vector3) -> void:
 	var axis := dir.cross(Vector3.UP).normalized().rotated(dir, _rng.randf() * TAU)
 	dir = dir.rotated(axis, absf(_rng.randfn(0.0, err)))
 	var shot_ammo := ammo
-	Ballistics.fire(origin, dir, shot_ammo, get_rid(), WeaponDB.velocity_factor(_stats.get("barrel_in", 5.0)), _hostile_rids, _stats.get("loudness", 1.0))
+	Ballistics.fire(origin, dir, shot_ammo, get_rid(), shot_ammo.velocity_factor(_stats.get("barrel_in", shot_ammo.reference_barrel_in)), _hostile_rids, _stats.get("loudness", 1.0))
 	if _audio.stream:
 		_audio.pitch_scale = _rng.randf_range(0.96, 1.04)
 		_audio.play()

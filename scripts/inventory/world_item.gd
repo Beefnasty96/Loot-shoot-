@@ -36,8 +36,9 @@ func _ready() -> void:
 		# On its side. A knife's handle is modelled on the pistol-grip line: lay that flat first.
 		var flat := Basis(Vector3.RIGHT, deg_to_rad(-72.0)) if item.def.weapon_kind == "knife" else Basis()
 		m.basis = Basis(Vector3.FORWARD, PI / 2.0) * flat
-		m.position.y = 0.015
-		_ring(0.22)
+		var long_gun := item.def.weapon_kind == "rifle"
+		m.position.y = 0.022 if long_gun else 0.015   # the stock is the widest part
+		_ring(0.45 if long_gun else 0.22)
 		return
 	_sprite = Sprite3D.new()
 	_sprite.axis = Vector3.AXIS_Y          # lies flat on the floor

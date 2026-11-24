@@ -1,6 +1,6 @@
 """First-person preview: arms + weapon seen from the player's eye.
 
-Usage: python3 render_fp.py <arms.blend> <weapon.blend> <out_dir> [samples]
+Usage: python3 render_fp.py <arms.blend> <weapon.blend> <out_dir> [samples] [rifle]
 Renders hip.png (hip-fire view), aim.png (looking down the sights) and side.png.
 """
 import math
@@ -59,7 +59,15 @@ def shot(name, eye_mm, look_mm, fov_deg):
 
 # Eye positions relative to the gun (mm, gun space). Godot fov 75 is vertical.
 # Hip: gun sits low-right of the eye. Aim: eye on the sight line.
-shot("hip", (-80, -235, 88), (-80, 2000, 88), 75)
-shot("aim", (0, -300, 20.2), (0, 2000, 20.2), 50)
-shot("side", (-700, -90, 0), (0, -90, -40), 38)
-shot("below", (250, -60, -380), (0, -60, -40), 45)
+if len(sys.argv) > 5 and sys.argv[5] == "rifle":
+    # M4A1 (m4_build.py): rear aperture at y -119, z 64.
+    shot("hip", (-118, -215, 130), (-118, 2000, 130), 75)
+    shot("aim", (0, -209, 64), (0, 2000, 64), 55)
+    shot("side", (-900, 40, 0), (0, 40, -40), 45)
+    shot("right", (900, 40, 0), (0, 40, -40), 45)
+    shot("below", (300, 40, -500), (0, 40, -40), 55)
+else:
+    shot("hip", (-80, -235, 88), (-80, 2000, 88), 75)
+    shot("aim", (0, -300, 20.2), (0, 2000, 20.2), 50)
+    shot("side", (-700, -90, 0), (0, -90, -40), 38)
+    shot("below", (250, -60, -380), (0, -60, -40), 45)
