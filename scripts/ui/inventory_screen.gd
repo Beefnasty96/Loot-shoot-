@@ -11,11 +11,18 @@ extends Control
 ##              B or Select  close
 ## Touch/mouse: drag an item and let go where you want it; or tap to pick up, tap to drop.
 ## Drop loose rounds on a magazine to load it; drop rounds on rounds to stack them.
+##
+## Weapons: Primary / Holster / Sheath slots under your gear (and on bodies).
+## Drop a magazine or an attachment on a gun to fit it (a magazine swaps with
+## the one inside). Y on a gun opens it up: every attachment slot as a tree
+## (a threaded barrel brings a muzzle slot, a rail brings a tactical slot), with
+## the stats it adds up to. Parts go in and out there; required parts (barrel,
+## grips, sights) can only be swapped, not left empty.
 
 signal changed
 
 const CELL := 52
-const SLOT_SIZE := Vector2(170, 104)
+const SLOT_SIZE := Vector2(170, 84)
 const COL_EQUIP := 40.0
 const COL_STORAGE := 440.0
 const COL_LOOT := 1190.0
@@ -39,6 +46,7 @@ var _labels: Array = []           ## {text, pos, size, color}
 var _cursor := 0
 var _held: InvItem
 var _held_from := {}
+var _mod_gun: InvItem              ## Gun opened for modding (null = panel closed).
 var _dragging := false
 var _press_target := -1
 var _message := ""
@@ -69,6 +77,7 @@ func open(target: Node = null) -> void:
 	player.ui_locked = true
 	player.sprinting = false
 	_cursor = 0
+	_mod_gun = null
 	_layout()
 	queue_redraw()
 
@@ -146,18 +155,25 @@ func _layout() -> void:
 	_labels.clear()
 	_label("EQUIPMENT", Vector2(COL_EQUIP, TOP - 34), 26, ACCENT)
 	_layout_slots(_equipment(), Vector2(COL_EQUIP, TOP), SLOT_SIZE, 2, 14)
+	var wy := TOP + 6 * (SLOT_SIZE.y + 22) + 6
+	_label("WEAPONS", Vector2(COL_EQUIP, wy), 18, ACCENT)
+	_layout_weapon_slots(_equipment(), Vector2(COL_EQUIP, wy + 22), Vector2(SLOT_SIZE.x * 2 + 12, 52), Vector2(SLOT_SIZE.x, 52), 13)
 	_label("YOUR STORAGE", Vector2(COL_STORAGE, TOP - 34), 26, ACCENT)
 	var y := _layout_storage(_equipment(), COL_STORAGE, COL_LOOT - 40, TOP)
 	if y < 0:
 		_label("No pockets. Wear pants, a jacket, a rig or a backpack to carry things.", Vector2(COL_STORAGE, TOP), 18, Color(0.7, 0.6, 0.5))
-	if container:
+	if _mod_gun:
+		_layout_mod_panel()
+	elif container:
 		_label(container.title.to_upper(), Vector2(COL_LOOT, TOP - 34), 26, ACCENT)
 		_add_grid(container.grid, Vector2(COL_LOOT, TOP), "")
 	elif _body():
 		_label("BODY", Vector2(COL_LOOT, TOP - 34), 26, Color(0.9, 0.5, 0.4))
 		var small := Vector2(104, 66)
 		_layout_slots(_body().model.equipment, Vector2(COL_LOOT, TOP), small, 4, 12)
-		var by := TOP + 3 * (small.y + 22) + 10
+		var bw := TOP + 3 * (small.y + 22)
+		_layout_weapon_slots(_body().model.equipment, Vector2(COL_LOOT, bw + 4), Vector2(small.x * 2 + 12, 46), Vector2(small.x, 46), 12)
+		var by := bw + 46 + 30 + 46 + 22
 		if _layout_storage(_body().model.equipment, COL_LOOT, size.x - 20, by) < 0:
 			_label("Nothing to carry things in.", Vector2(COL_LOOT, by + 10), 18, Color(0.55, 0.57, 0.52))
 	elif _ground:
@@ -173,6 +189,52 @@ func _layout_slots(eq: Equipment, origin: Vector2, slot_size: Vector2, cols: int
 		var pos := origin + Vector2((i % cols) * (slot_size.x + 12), (i / cols) * (slot_size.y + 22))
 		_label(Equipment.SLOT_NAMES[slot].to_upper(), pos + Vector2(0, -4), label_size, Color(0.7, 0.72, 0.66))
 		_targets.append({kind = "slot", slot = slot, eq = eq, rect = Rect2(pos + Vector2(0, 4), slot_size)})
+
+
+## Primary (wide) on one row, holster + sheath on the next.
+func _layout_weapon_slots(eq: Equipment, origin: Vector2, wide: Vector2, small: Vector2, label_size: int) -> void:
+	var rows := [[["primary", wide]], [["sidearm", small], ["melee", small]]]
+	var y := origin.y
+	for row: Array in rows:
+		var x := origin.x
+		for cell: Array in row:
+			var r := Rect2(Vector2(x, y + 14), cell[1])
+			_label(Equipment.WEAPON_SLOT_NAMES[cell[0]].to_upper(), Vector2(x, y + 10), label_size, Color(0.7, 0.72, 0.66))
+			_targets.append({kind = "wslot", slot = cell[0], eq = eq, rect = r})
+			x += (cell[1] as Vector2).x + 12
+		y += (row[0][1] as Vector2).y + 22
+
+
+## The gun's attachment tree, one row per slot (children indented), plus its stats.
+func _layout_mod_panel() -> void:
+	var g := _mod_gun
+	_label("%s - MODIFY" % g.def.display_name.to_upper(), Vector2(COL_LOOT, TOP - 34), 26, ACCENT)
+	_label("Drop parts in the slots. Y closes.", Vector2(COL_LOOT, TOP - 8), 14, Color(0.55, 0.57, 0.52))
+	var y := TOP + 14
+	y = _layout_mod_slots(g, g, 0, y)
+	var st := WeaponDB.stats(g)
+	var vf := WeaponDB.velocity_factor(st.barrel_in)
+	var lines := [
+		"Weight %s    Ergonomics %d    Recoil %d%%" % [Units.pounds(st.weight + (g.wpn_mag.weight() if g.wpn_mag else 0.0)), roundi(st.ergo), roundi(st.recoil * 100.0)],
+		"Barrel %.1f in (%+d%% velocity)    Loudness %d%%%s" % [st.barrel_in, roundi((vf - 1.0) * 100.0), roundi(st.loudness * 100.0), "    Light" if not st.light.is_empty() else ""],
+	]
+	if not st.working:
+		lines.append("WON'T FIRE: missing " + ", ".join(st.missing))
+	for i in lines.size():
+		_label(lines[i], Vector2(COL_LOOT, y + 26 + i * 26), 18, Color(1, 0.45, 0.35) if i == 2 else Color(0.85, 0.87, 0.8))
+
+
+func _layout_mod_slots(gun: InvItem, owner: InvItem, depth: int, y: float) -> float:
+	var sl := WeaponDB.slots_of(owner)
+	for sn: String in sl:
+		var x := COL_LOOT + depth * 36
+		var req: bool = sl[sn].get("required", false)
+		_label(sn.to_upper() + (" *" if req else ""), Vector2(x, y + 12), 13, Color(0.7, 0.72, 0.66))
+		_targets.append({kind = "mod", gun = gun, owner = owner, slot = sn, rect = Rect2(Vector2(x, y + 16), Vector2(300, 50))})
+		y += 76
+		if owner.mods.has(sn):
+			y = _layout_mod_slots(gun, owner.mods[sn], depth + 1, y)
+	return y
 
 
 ## Rig / pockets / backpack grids of `eq`, flowing between x0 and x1. Returns the next y, or -1 if none.
@@ -261,6 +323,16 @@ func _draw() -> void:
 			_draw_item_in(it, t.rect, true)
 		elif GearDB.for_slot(t.slot).is_empty():
 			draw_string(_font, t.rect.position + Vector2(8, t.rect.size.y - 10), "-", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.4, 0.4, 0.38))
+	for t in _targets:
+		if t.kind != "wslot" and t.kind != "mod":
+			continue
+		draw_rect(t.rect, CELL_BG)
+		draw_rect(t.rect, CELL_LINE if t.kind == "wslot" or t.owner.mods.has(t.slot) else Color(0.45, 0.4, 0.25), false, 2.0)
+		var it := _item_at_target(t)
+		if it:
+			_draw_item_in(it, t.rect, true)
+		elif t.kind == "mod":
+			draw_string(_font, t.rect.position + Vector2(8, t.rect.size.y - 18), "empty", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.45, 0.45, 0.42))
 	# Grids.
 	for g in _grid_rects:
 		var grid: InvGrid = g.grid
@@ -287,9 +359,9 @@ func _draw() -> void:
 			ok = _can_drop_at(t)
 		else:
 			r = t.rect
-			ok = _held.def.is_gear() and GearDB.get_item(_held.def.gear_id).slot == t.slot
+			ok = _fits_slot(t, _held) or (t.kind == "wslot" and _item_at_target(t) != null and not _slot_for(_item_at_target(t), _held).is_empty())
 		draw_rect(r, Color(0.2, 0.8, 0.3, 0.25) if ok else Color(0.9, 0.2, 0.2, 0.25))
-		_draw_item_in(_held, r, t.kind == "slot", 0.8)
+		_draw_item_in(_held, r, t.kind != "cell", 0.8)
 	draw_rect(t.rect.grow(1), ACCENT, false, 3.0)
 	# Info for whatever is under the cursor.
 	var info := ""
@@ -300,12 +372,17 @@ func _draw() -> void:
 		info = hover.info()
 	elif t.kind == "slot":
 		info = Equipment.SLOT_NAMES[t.slot] + ": empty"
-	draw_rect(Rect2(COL_EQUIP, 880, 370, 170), Color(0.04, 0.05, 0.04, 0.9))
+	elif t.kind == "wslot":
+		info = Equipment.WEAPON_SLOT_NAMES[t.slot] + ": empty"
+	elif t.kind == "mod":
+		info = "%s slot: empty\nTakes: %s" % [t.slot.capitalize(), ", ".join(WeaponDB.slots_of(t.owner)[t.slot].accepts)]
+	var ib := Rect2(COL_STORAGE, 890, COL_LOOT - COL_STORAGE - 40, 150)
+	draw_rect(ib, Color(0.04, 0.05, 0.04, 0.9))
 	var lines := info.split("\n")
-	for i in lines.size():
-		draw_string(_font, Vector2(COL_EQUIP + 10, 906 + i * 24), lines[i], HORIZONTAL_ALIGNMENT_LEFT, 350, 18 if i else 20,
+	for i in mini(lines.size(), 6):
+		draw_string(_font, ib.position + Vector2(10, 24 + i * 22), lines[i], HORIZONTAL_ALIGNMENT_LEFT, ib.size.x - 20, 17 if i else 20,
 			ACCENT if i == 0 else Color(0.85, 0.87, 0.8))
-	var hints := "A pick up/put down    Y rotate / unload mag    X quick move (to ground/crate/body and back)    B close    Rounds on a mag = load it"
+	var hints := "A pick up/put down    Y rotate / unload mag / open a gun    X quick move    B close    Rounds on a mag = load it    Mags & parts on a gun = fit them"
 	draw_string(_font, Vector2(COL_STORAGE, size.y - 24), hints, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.6, 0.62, 0.57))
 	if _message_time > 0.0:
 		draw_string(_font, Vector2(COL_STORAGE, size.y - 60), _message, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 0.7, 0.4))
@@ -400,7 +477,16 @@ func _input(event: InputEvent) -> void:
 		if _held:
 			_held.rotated = not _held.rotated
 		else:
-			_unload_mag()
+			var t: Dictionary = _targets[_cursor]
+			var it := _item_at_target(t)
+			if t.kind == "mod" or (it and it == _mod_gun):
+				_mod_gun = null
+				_relayout()
+			elif it and it.def.is_firearm():
+				_mod_gun = it
+				_relayout()
+			else:
+				_unload_mag()
 	elif event.is_action_pressed("reload"):
 		_quick_move()
 	elif event is InputEventAction or event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventKey:
@@ -450,6 +536,10 @@ func _move_cursor(action: String) -> void:
 func _item_at_target(t: Dictionary) -> InvItem:
 	if t.kind == "cell":
 		return (t.grid as InvGrid).item_at(t.cell)
+	if t.kind == "wslot":
+		return (t.eq as Equipment).get_weapon(t.slot)
+	if t.kind == "mod":
+		return (t.owner as InvItem).mods.get(t.slot)
 	var g: GearInstance = (t.eq as Equipment).get_slot(t.slot)
 	return InvItem.from_gear(g) if g else null
 
@@ -464,6 +554,30 @@ func _pick() -> void:
 		_held = e.item
 		_held_from = {grid = grid, pos = e.pos, rotated = _held.rotated}
 		grid.remove(_held)
+	elif t.kind == "wslot":
+		var eq: Equipment = t.eq
+		var w := eq.get_weapon(t.slot)
+		if w == null:
+			return
+		_held = w
+		_held_from = {wslot = t.slot, eq = eq}
+		eq.disarm(t.slot)
+		if _mod_gun == w:
+			_mod_gun = null
+		_relayout()
+	elif t.kind == "mod":
+		var owner: InvItem = t.owner
+		var part: InvItem = owner.mods.get(t.slot)
+		if part == null:
+			return
+		if WeaponDB.slots_of(owner)[t.slot].get("required", false):
+			_flash("The gun needs its %s: drop a replacement on it to swap." % t.slot)
+			return
+		owner.mods.erase(t.slot)
+		_held = part
+		_held_from = {mod_owner = owner, mod_slot = t.slot}
+		_gun_changed(t.gun)
+		_relayout()
 	else:
 		var eq: Equipment = t.eq
 		var g: GearInstance = eq.get_slot(t.slot)
@@ -474,6 +588,63 @@ func _pick() -> void:
 		eq.unequip(t.slot)
 		_relayout()
 	_changed()
+
+
+## Can `it` go in slot-type target `t`?
+func _fits_slot(t: Dictionary, it: InvItem) -> bool:
+	match t.kind:
+		"slot":
+			return it.def.is_gear() and GearDB.get_item(it.def.gear_id).slot == t.slot
+		"wslot":
+			return it.def.is_weapon() and it.def.weapon_slot == t.slot
+		"mod":
+			return WeaponDB.accepts(t.owner, t.slot, it) and it != t.gun
+	return false
+
+
+## Put `part` into `owner`'s slot inside `gun`; returns {ok, old}. If the gun lies in a grid and
+## gets longer, it has to still fit there.
+func _install(gun: InvItem, owner: InvItem, slot: String, part: InvItem) -> Dictionary:
+	var old: InvItem = owner.mods.get(slot)
+	owner.mods[slot] = part
+	var grid := _grid_holding(gun)
+	if grid and not grid.fits(gun, grid.pos_of(gun), gun):
+		if old:
+			owner.mods[slot] = old
+		else:
+			owner.mods.erase(slot)
+		return {ok = false}
+	_gun_changed(gun)
+	return {ok = true, old = old}
+
+
+func _grid_holding(it: InvItem) -> InvGrid:
+	for g in _grid_rects:
+		if (g.grid as InvGrid).pos_of(it) != Vector2i(-1, -1):
+			return g.grid
+	return null
+
+
+## First slot anywhere in the gun's tree that takes `part` (empty ones first; a magazine swaps).
+func _slot_for(gun: InvItem, part: InvItem) -> Dictionary:
+	var owners: Array = [gun]
+	for e: Dictionary in WeaponDB.walk(gun):
+		owners.append(e.item)
+	var taken := {}
+	for owner: InvItem in owners:
+		for sn: String in WeaponDB.slots_of(owner):
+			if WeaponDB.accepts(owner, sn, part):
+				if not owner.mods.has(sn):
+					return {owner = owner, slot = sn}
+				if taken.is_empty():
+					taken = {owner = owner, slot = sn}
+	return taken
+
+
+## A gun's parts changed: rebuild the model if it's the one in your holster.
+func _gun_changed(gun: InvItem) -> void:
+	if player.firearm and player.firearm.gun == gun:
+		player.firearm.refresh()
 
 
 func _can_drop_at(t: Dictionary) -> bool:
@@ -487,6 +658,8 @@ func _can_drop_at(t: Dictionary) -> bool:
 func _merge_kind(other: InvItem) -> String:
 	if other.def == _held.def and _held.def.max_stack > 1 and other.count < other.def.max_stack:
 		return "stack"
+	if other.def.is_weapon() and (_held.def.is_mag() or _held.def.is_part()) and not _slot_for(other, _held).is_empty():
+		return "fit"
 	if _held.def.is_ammo() and other.def.is_mag() and other.def.caliber == _held.def.caliber \
 			and other.mag_count < other.def.mag_capacity and (other.mag_count == 0 or other.mag_ammo.id == _held.def.ammo_id):
 		return "load"
@@ -495,6 +668,40 @@ func _merge_kind(other: InvItem) -> String:
 
 func _drop() -> void:
 	var t: Dictionary = _targets[_cursor]
+	if t.kind == "wslot" and (_held.def.is_mag() or _held.def.is_part()):
+		# A magazine or part dropped on the gun in your holster: fit it.
+		var w := (t.eq as Equipment).get_weapon(t.slot)
+		var where := _slot_for(w, _held) if w else {}
+		if where.is_empty():
+			_flash("That doesn't fit this weapon.")
+			return
+		var pname := _held.def.display_name
+		var r := _install(w, where.owner, where.slot, _held)
+		_flash(("Swapped in the %s." if r.old else "Fitted the %s.") % pname)
+		_held = r.old
+		_held_from = {}
+		_relayout()
+		_changed()
+		return
+	if t.kind == "wslot" or t.kind == "mod":
+		if not _fits_slot(t, _held):
+			_flash("That doesn't go there.")
+			return
+		if t.kind == "wslot":
+			var eq: Equipment = t.eq
+			var old := eq.arm(_held)
+			_held = old
+			_held_from = {wslot = t.slot, eq = eq} if old else {}
+		else:
+			var r := _install(t.gun, t.owner, t.slot, _held)
+			if not r.ok:
+				_flash("No room for the longer gun where it's lying.")
+				return
+			_held = r.old
+			_held_from = {}
+		_relayout()
+		_changed()
+		return
 	if t.kind == "slot":
 		if not _held.def.is_gear() or GearDB.get_item(_held.def.gear_id).slot != t.slot:
 			_flash("That doesn't go there.")
@@ -519,6 +726,18 @@ func _drop() -> void:
 					_held = null
 				_changed()
 				return
+			"fit":
+				var where := _slot_for(other, _held)
+				var pname := _held.def.display_name
+				var r := _install(other, where.owner, where.slot, _held)
+				if not r.ok:
+					_flash("No room for the longer gun where it's lying.")
+					return
+				_flash(("Swapped in the %s." if r.old else "Fitted the %s.") % pname)
+				_held = r.old
+				_held_from = {}
+				_changed()
+				return
 			"load":
 				var ammo := AmmoDB.get_ammo(_held.def.ammo_id)
 				var n := mini(_held.count, other.def.mag_capacity - other.mag_count)
@@ -538,6 +757,18 @@ func _drop() -> void:
 
 
 func _return_held() -> bool:
+	if _held_from.has("wslot") and (_held_from.eq as Equipment).get_weapon(_held_from.wslot) == null:
+		(_held_from.eq as Equipment).arm(_held)
+		_held = null
+		_relayout()
+		return true
+	if _held_from.has("mod_owner") and not (_held_from.mod_owner as InvItem).mods.has(_held_from.mod_slot):
+		(_held_from.mod_owner as InvItem).mods[_held_from.mod_slot] = _held
+		_held = null
+		if player.firearm:
+			player.firearm.refresh()
+		_relayout()
+		return true
 	if _held_from.has("slot") and (_held_from.eq as Equipment).get_slot(_held_from.slot) == null and _held.gear:
 		(_held_from.eq as Equipment).equip(_held.gear)
 		_held = null
@@ -575,6 +806,30 @@ func _quick_move() -> void:
 	if _held:
 		return
 	var t: Dictionary = _targets[_cursor]
+	if t.kind == "mod":
+		return
+	if t.kind == "wslot":
+		var eq: Equipment = t.eq
+		var w := eq.get_weapon(t.slot)
+		if w == null:
+			return
+		eq.disarm(t.slot)
+		var ok := false
+		if eq == _equipment():
+			ok = _store_in(_other_grids(), w) or _store(w)
+		elif _equipment().get_weapon(t.slot) == null:
+			_equipment().arm(w)       # off the body and straight into your holster
+			ok = true
+		else:
+			ok = _store(w)
+		if ok:
+			_flash("Moved %s." % w.def.display_name)
+		else:
+			eq.arm(w)
+			_flash("No room for it.")
+		_relayout()
+		_changed()
+		return
 	if t.kind == "slot":
 		var eq: Equipment = t.eq
 		var g: GearInstance = eq.get_slot(t.slot)
@@ -610,6 +865,10 @@ func _quick_move() -> void:
 		# Wearables go straight on if that slot is free.
 		if it.def.is_gear() and _equipment().get_slot(GearDB.get_item(it.def.gear_id).slot) == null:
 			_equipment().equip(it.gear)
+			_relayout()
+			ok = true
+		elif it.def.is_weapon() and _equipment().get_weapon(it.def.weapon_slot) == null:
+			_equipment().arm(it)
 			_relayout()
 			ok = true
 		else:

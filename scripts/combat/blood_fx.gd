@@ -298,10 +298,9 @@ func _spray(pos: Vector3, dir: Vector3, amount: int, speed: float, size: float) 
 	p.global_position = pos + dir * 0.01
 	p.emitting = true
 	_sprays.append(p)
-	get_tree().create_timer(1.0).timeout.connect(func():
-		if is_instance_valid(p):
-			_sprays.erase(p)
-			p.queue_free())
+	p.finished.connect(func():
+		_sprays.erase(p)
+		p.queue_free())
 
 
 ## White splat (modulated red): a soft central blob with satellite droplets.

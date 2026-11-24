@@ -28,6 +28,17 @@ static func _floor_point(node: Node3D, at: Vector3) -> Vector3:
 func _ready() -> void:
 	add_to_group("interactable")
 	add_to_group("world_item")
+	if item.def.is_weapon() and item.def.scene_path != "" and ResourceLoader.exists(item.def.scene_path):
+		# Guns and knives lie on the floor as themselves, parts and all.
+		var m: Node3D = (load(item.def.scene_path) as PackedScene).instantiate()
+		add_child(m)
+		WeaponDB.assemble(item, m)
+		# On its side. A knife's handle is modelled on the pistol-grip line: lay that flat first.
+		var flat := Basis(Vector3.RIGHT, deg_to_rad(-72.0)) if item.def.weapon_kind == "knife" else Basis()
+		m.basis = Basis(Vector3.FORWARD, PI / 2.0) * flat
+		m.position.y = 0.015
+		_ring(0.22)
+		return
 	_sprite = Sprite3D.new()
 	_sprite.axis = Vector3.AXIS_Y          # lies flat on the floor
 	_sprite.double_sided = true
@@ -38,10 +49,14 @@ func _ready() -> void:
 		_sprite.texture = load(path)
 		_sprite.pixel_size = CELL_M / 64.0
 	add_child(_sprite)
-	# A faint marker so small items are easy to spot.
+	_ring()
+
+
+## A faint marker so small items are easy to spot.
+func _ring(radius := 0.0) -> void:
 	var ring := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
-	disc.top_radius = maxf(item.def.size.x, item.def.size.y) * CELL_M * 0.6
+	disc.top_radius = radius if radius > 0.0 else maxf(item.def.size.x, item.def.size.y) * CELL_M * 0.6
 	disc.bottom_radius = disc.top_radius
 	disc.height = 0.004
 	disc.radial_segments = 12
@@ -64,7 +79,12 @@ func prompt() -> String:
 
 
 func use(p: Player) -> void:
-	if p.character.equipment.store(item):
+	var eq := p.character.equipment
+	if item.def.is_weapon() and eq.get_weapon(item.def.weapon_slot) == null:
+		eq.arm(item)            # straight into the empty holster/sheath
+		queue_free()
+		return
+	if eq.store(item):
 		queue_free()
 	else:
 		p.firearm._notify("No room for the %s." % item.def.display_name)

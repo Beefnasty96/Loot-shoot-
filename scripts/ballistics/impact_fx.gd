@@ -121,10 +121,9 @@ func _puff(pos: Vector3, normal: Vector3, props: Dictionary, strength: float) ->
 	p.global_position = pos + normal * 0.01
 	p.emitting = true
 	_particles.append(p)
-	get_tree().create_timer(1.2).timeout.connect(func():
-		if is_instance_valid(p):
-			_particles.erase(p)
-			p.queue_free())
+	p.finished.connect(func():
+		_particles.erase(p)
+		p.queue_free())
 
 
 func _sound(key: String, pos: Vector3) -> void:

@@ -7,6 +7,11 @@ extends LevelKit
 ## country-geese wallpaper border, wood paneling and a brick fireplace in the
 ## family room, brass doorknobs, floral sofas and CRT TVs.
 ##
+## Hostiles: five armed occupants (Enemy) — some hold rooms covering doorways,
+## some patrol, one waits with a knife. Kill or incapacitate them all to clear
+## the house; the HUD counts them down and times you. A navmesh is baked from
+## the level at load (doors excluded, so they walk up and open them).
+##
 ## Construction is real enough for bullets: interior walls are 2x4 + drywall
 ## (pistol rounds go through), exterior walls are siding/OSB/batts/drywall,
 ## hollow-core interior doors, a solid front door, windows that break, brick,
@@ -26,6 +31,12 @@ const GX0 := -14.7
 const GZ0 := -2.0
 
 var player: Player
+var enemies: Array[Enemy] = []
+var spawn_enemies := true        ## Tests turn this off to place their own.
+var _clock := 0.0
+var _cleared := false
+var _hud: Node
+var _nav: NavigationRegion3D
 ## Spots for the AI (next step): room centres the enemies can be placed in or patrol between.
 var rooms := {}
 
@@ -48,6 +59,7 @@ func _ready() -> void:
 	_yard()
 	_neighbours()
 	batch_meshes()
+	_bake_navigation()
 
 	player = Player.new()
 	player.name = "Player"
@@ -56,6 +68,88 @@ func _ready() -> void:
 	var hud: Node = load("res://scripts/hud.gd").new()
 	hud.player = player
 	add_child(hud)
+	_hud = hud
+	if spawn_enemies:
+		_spawn_enemies()
+
+
+func _process(delta: float) -> void:
+	if _hud == null:
+		return
+	if enemies.is_empty():
+		_hud.objective_text = ""
+		return
+	var left := 0
+	for e in enemies:
+		if is_instance_valid(e) and not e.dead and not e.incapacitated():
+			left += 1
+	if not _cleared:
+		_clock += delta
+	if left == 0 and not _cleared:
+		_cleared = true
+	var t := "%d:%02d" % [int(_clock) / 60, int(_clock) % 60]
+	_hud.objective_text = ("HOUSE CLEAR  -  %s" % t) if _cleared else ("Hostiles: %d    %s" % [left, t])
+
+
+# ------------------------------------------------------------------ AI
+
+## Navmesh for the AI, baked from the static level geometry at load (doors are on their own layer).
+func _bake_navigation() -> void:
+	var nm := NavigationMesh.new()
+	nm.agent_radius = 0.15          # with 0.1 m cells, 30 in interior doors stay open (capsules slide past the frames)
+	nm.agent_height = 1.75
+	nm.agent_max_climb = 0.25
+	nm.cell_size = 0.1
+	nm.cell_height = 0.05
+	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	nm.geometry_collision_mask = 1
+	nm.filter_baking_aabb = AABB(Vector3(-22, -1, -16), Vector3(42, 5, 32))
+	var map := get_world_3d().navigation_map
+	NavigationServer3D.map_set_cell_size(map, nm.cell_size)
+	NavigationServer3D.map_set_cell_height(map, nm.cell_height)
+	var src := NavigationMeshSourceGeometryData3D.new()
+	NavigationServer3D.parse_source_geometry_data(nm, src, self)
+	NavigationServer3D.bake_from_source_geometry_data(nm, src)
+	_nav = NavigationRegion3D.new()
+	_nav.navigation_mesh = nm
+	add_child(_nav)
+
+
+## Five occupants: [room, weapon, role, facing toward, patrol rooms].
+func _spawn_enemies() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var plan := [
+		["living", "pistol", "holder", Vector3(-2.55, 0, 4.7), []],                  # covers the front door
+		["kitchen", "pistol", "pusher", Vector3(-8.0, 0, 1.8), ["kitchen", "dining"]],
+		["master", "pistol", "holder", Vector3(7.8, 0, -0.6), []],                    # covers the bedroom door
+		["family", "pistol", "pusher", Vector3(0.0, 0, 0.0), ["family", "hall", "office"]],
+		["bedroom3", "knife", "holder", Vector3(4.4, 0, -0.6), []],                   # waits by the door
+	]
+	for p: Array in plan:
+		var at: Vector3 = rooms[p[0]] + Vector3(rng.randf_range(-0.6, 0.6), 0.05, rng.randf_range(-0.6, 0.6))
+		var pts: Array[Vector3] = []
+		for r: String in p[4]:
+			pts.append(rooms[r])
+		add_enemy(at, p[3], p[1], p[2], pts, rng)
+
+
+func add_enemy(at: Vector3, look_at_point: Vector3, weapon: String, role: String, patrol: Array[Vector3] = [], rng: RandomNumberGenerator = null) -> Enemy:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	var e := Enemy.new()
+	e.position = at
+	var d := look_at_point - at
+	e.rotation.y = atan2(-d.x, -d.z)
+	e.patrol = patrol
+	add_child(e)
+	e.post = at
+	e.post_facing = e.rotation.y
+	e._yaw_target = e.rotation.y
+	e.setup(rng, weapon, role)
+	enemies.append(e)
+	return e
 
 
 func _materials() -> void:
@@ -296,7 +390,7 @@ func _furnish() -> void:
 	box(Vector3(1.8, CEILING, 0.55), Vector3(-1.4, CEILING / 2.0, Z0 + 0.32), brick, "brick")
 	box(Vector3(0.8, 0.7, 0.1), Vector3(-1.4, 0.45, Z0 + 0.55), black, "brick", 0.0, false)        # firebox
 	box(Vector3(2.0, 0.08, 0.3), Vector3(-1.4, 1.3, Z0 + 0.62), oak, "wood", 0.0, false)          # mantel
-	_sofa(Vector3(-1.2, 0, -1.4), 180.0, 2.4, floral)
+	_sofa(Vector3(-1.0, 0, -2.3), 180.0, 2.2, floral)
 	_sofa(Vector3(-3.05, 0, -2.9), 90.0, 1.6, floral)
 	box(Vector3(0.35, 1.8, 1.2), Vector3(1.3, 0.9, -3.4), oak, "cabinet")
 	_fan(Vector3(-0.95, CEILING, -2.8), oak, brass)
@@ -324,7 +418,7 @@ func _furnish() -> void:
 	# --- Master bath: shower stall, toilet, vanity.
 	box(Vector3(0.9, 2.0, 0.9), Vector3(7.5, 1.0, Z0 + 0.5), flat("shower", Color(0.85, 0.9, 0.92, 1.0), 0.2), "glass")
 	_toilet(Vector3(8.8, 0, -4.4), 0.0, white)
-	_counter(Vector3(8.4, 0, -3.25), 1.2, 0.55, oak, flat("marble", Color(0.92, 0.9, 0.85), 0.3), 180.0)
+	_counter(Vector3(7.3, 0, -3.5), 0.9, 0.5, oak, flat("marble", Color(0.92, 0.9, 0.85), 0.3), 90.0)
 
 	# --- Bedroom 2 (teenager): full bed, dresser with a small TV, posters.
 	_bed(Vector3(7.6, 0, 3.6), 90.0, Vector2(1.4, 1.95), sheets[1], black)
@@ -341,7 +435,7 @@ func _furnish() -> void:
 	box(Vector3(0.18, 0.42, 0.45), Vector3(10.6, 0.98, 4.25), beige_plastic, "appliance")    # tower
 	box(Vector3(0.45, 0.02, 0.16), Vector3(10.0, 0.775, 4.0), beige_plastic, "appliance", 0.0, false)
 	box(Vector3(0.45, 1.3, 0.6), Vector3(X1 - 0.35, 0.65, 1.2), flat("file", Color(0.55, 0.55, 0.5), 0.5, 0.3), "sheet_metal")
-	box(Vector3(1.0, 1.8, 0.32), Vector3(9.3, 0.9, 0.8), oak, "cabinet")
+	box(Vector3(1.0, 1.8, 0.32), Vector3(8.84, 0.9, 2.4), oak, "cabinet", 90.0)
 	_chair(Vector3(10.1, 0, 3.6), 0.0, black)
 
 	# --- Laundry: washer and dryer.
@@ -419,7 +513,7 @@ func _garage() -> void:
 	# A maroon '90s sedan, workbench, shelves, mower.
 	var maroon := flat("car_paint", Color(0.38, 0.06, 0.1), 0.35, 0.4)
 	var glass: Material = _mats.get("glass", maroon)
-	var car := box(Vector3(1.78, 0.75, 4.85), Vector3(-12.3, 0.55, 1.6), maroon, "car")
+	var car := box(Vector3(1.78, 0.75, 4.7), Vector3(-12.3, 0.55, 1.4), maroon, "car")
 	box(Vector3(1.5, 0.5, 2.4), Vector3(0, 0.62, -0.2), glass, "car", 0.0, true, car)   # cabin
 	for wx in [-0.85, 0.85]:
 		for wz in [-1.5, 1.5]:
