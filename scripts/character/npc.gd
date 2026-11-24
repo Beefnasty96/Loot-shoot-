@@ -1,9 +1,10 @@
 class_name Npc
-extends Node3D
+extends CharacterBody3D
 ## A non-player person: a CharacterModel with hitboxes on its bones, a
 ## DamageModel and gear with things in the pockets. When killed it falls and
 ## the body can be searched (A): its worn gear and everything stored in it.
-## AI comes later; for now they stand still.
+## On its own an Npc stands still (the range civilians); Enemy adds a brain and a gun.
+## The capsule (layer 2) is for moving and blocking; bullets and blades use the hitboxes.
 ##
 ## Getting shot: each hit hands the body the momentum the bullet lost plus a
 ## share of the energy it dumped. Alive, the struck part flinches and the
@@ -55,12 +56,33 @@ var _sit_target := 0.0
 const ENERGY_PUSH := 0.02
 
 
+const RADIUS := 0.3
+const HEIGHT := 1.75
+
+
 func _ready() -> void:
+	collision_layer = 2
+	collision_mask = 1 | 2 | 32   # world, other people, doors
+	var cs := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = RADIUS
+	cap.height = HEIGHT
+	cs.shape = cap
+	cs.position.y = HEIGHT / 2.0
+	add_child(cs)
 	model = CharacterModel.new()
 	add_child(model)
 	add_to_group("npc")
-	_build_hitboxes()
+	_hitboxes = build_hitboxes(model, self)
 	damage.set_body_mass(model.body_mass_kg())
+
+
+## RIDs of this person's own hitboxes (so their own shots don't hit themselves).
+func hitbox_rids() -> Array[RID]:
+	var out: Array[RID] = []
+	for hb in _hitboxes:
+		out.append(hb.get_rid())
+	return out
 
 
 ## New random person: looks, clothes and pocket contents.
@@ -90,7 +112,9 @@ func randomize_person(rng: RandomNumberGenerator) -> void:
 				break
 
 
-func _build_hitboxes() -> void:
+## Hitboxes on a CharacterModel's bones, reporting hits to `receiver` (take_hit). Used by Npc and Player.
+static func build_hitboxes(model: CharacterModel, receiver: Node) -> Array[Hitbox]:
+	var out: Array[Hitbox] = []
 	var sk := model.skeleton
 	for h: Array in HITBOXES:
 		var bone := sk.find_bone(h[1])
@@ -102,7 +126,7 @@ func _build_hitboxes() -> void:
 		var hb := Hitbox.new()
 		hb.zone = h[0]
 		hb.gel_factor = h[4]
-		hb.receiver = self
+		hb.receiver = receiver
 		hb.bone_name = h[1]
 		var cs := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
@@ -112,7 +136,8 @@ func _build_hitboxes() -> void:
 		# Placed in rest pose (rig space), expressed in the bone's frame so it follows the bone.
 		hb.transform = sk.get_bone_global_rest(bone).affine_inverse() * Transform3D(Basis(), h[2])
 		att.add_child(hb)
-		_hitboxes.append(hb)
+		out.append(hb)
+	return out
 
 
 func _process(delta: float) -> void:
@@ -225,6 +250,9 @@ func take_hit(info: Dictionary) -> void:
 
 func die(impulse := Vector3.ZERO, at := Vector3.ZERO, bone := "") -> void:
 	dead = true
+	collision_layer = 0           # the ragdoll takes over; nothing to bump into
+	collision_mask = 0
+	velocity = Vector3.ZERO
 	model.move_speed = 0.0
 	model.start_ragdoll(impulse, at, bone)   # hitboxes stay on, so the body still takes shots
 	add_to_group("interactable")

@@ -10,7 +10,7 @@ extends RefCounted
 ## length into damage and bleeding. Used by the player's Ka-Bar and, later, by
 ## knife-armed enemies.
 
-const MASK := 1 | 4        ## World and hitboxes.
+const MASK := 1 | 4 | 32   ## World, hitboxes, doors.
 ## Cut/stab resistance of clothing, in joules of thrust it soaks up (slashes lose 2.5 mm per joule).
 const CUT_RESIST := {tshirt = 2.0, jacket = 8.0, vest = 6.0, pants = 3.0, gloves = 4.0, cap = 1.0, beanie = 1.5, boots = 12.0, backpack = 0.0}
 ## Which worn slots cover each zone.

@@ -55,7 +55,10 @@ func _process(delta: float) -> void:
 		return
 
 	# Smoothly blend between poses.
-	_aim = move_toward(_aim, 1.0 if player.aiming else 0.0, delta * 6.0)
+	# Aim speed from the gun's ergonomics (grips, sights, a heavy can on the front).
+	var st: Dictionary = player.firearm.stats if player.firearm else {}
+	var aim_rate := 6.0 * (0.6 + float(st.get("ergo", 60.0)) / 100.0 * 0.7) * float(st.get("ads", 1.0))
+	_aim = move_toward(_aim, 1.0 if player.aiming else 0.0, delta * aim_rate)
 	_sprint = move_toward(_sprint, 1.0 if (player.sprinting and not player.aiming) else 0.0, delta * 5.0)
 	var aim_k := smoothstep(0.0, 1.0, _aim)
 	var sprint_k := smoothstep(0.0, 1.0, _sprint)

@@ -14,7 +14,8 @@ extends Node
 ## Every impact emits `impact(info)` with speeds, energies (J and ft-lbs) and outcome.
 
 signal impact(info: Dictionary)
-signal melee_impact(info: Dictionary)   ## Blade contacts (Melee.strike), for the HUD and sounds.
+signal melee_impact(info: Dictionary)
+signal gunshot(origin: Vector3, shooter: RID, loudness: float)   ## Every shot fired, for AI hearing (1 = unsuppressed).   ## Blade contacts (Melee.strike), for the HUD and sounds.
 
 const GRAVITY := 9.81
 const AIR_DENSITY := 1.225
@@ -22,7 +23,7 @@ const SPEED_OF_SOUND := 343.0
 const V_MIN := 55.0          ## m/s: below this a pistol bullet no longer penetrates tissue.
 const MAX_LIFE := 5.0
 const MAX_THICKNESS := 2.0   ## m: anything thicker stops the bullet.
-const RAY_MASK := 1 | 2 | 4  ## world, characters, hitboxes
+const RAY_MASK := 1 | 4 | 32  ## world, hitboxes, doors (character capsules are not bullet stoppers: hitboxes are)
 const MAX_EVENTS_PER_TICK := 6
 const TRAIL_LIFE := 4.0
 const G1 := [
@@ -37,6 +38,7 @@ class Bullet:
 	var pos: Vector3
 	var vel: Vector3
 	var shooter: RID
+	var exclude: Array[RID] = []    ## Shooter plus their own hitboxes.
 	var expanded := false
 	var clogged := false
 	var deformed := false
@@ -75,8 +77,11 @@ func _ready() -> void:
 
 
 ## Fire one bullet. `velocity_factor` scales muzzle velocity for barrels shorter/longer than the reference.
-func fire(origin: Vector3, direction: Vector3, ammo: AmmoType, shooter: RID, velocity_factor := 1.0) -> Bullet:
+func fire(origin: Vector3, direction: Vector3, ammo: AmmoType, shooter: RID, velocity_factor := 1.0, exclude: Array[RID] = [], loudness := 1.0) -> Bullet:
 	var b := Bullet.new()
+	b.exclude.append(shooter)
+	b.exclude.append_array(exclude)
+	gunshot.emit(origin, shooter, loudness)
 	b.ammo = ammo
 	b.pos = origin
 	b.vel = direction.normalized() * ammo.muzzle_ms() * velocity_factor
@@ -130,7 +135,7 @@ func _step(b: Bullet, dt: float) -> void:
 func _trace(b: Bullet, from: Vector3, to: Vector3) -> void:
 	var space := get_viewport().get_world_3d().direct_space_state
 	for _i in MAX_EVENTS_PER_TICK:
-		var q := PhysicsRayQueryParameters3D.create(from, to, RAY_MASK, [b.shooter])
+		var q := PhysicsRayQueryParameters3D.create(from, to, RAY_MASK, b.exclude)
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
 			b.distance += from.distance_to(to)

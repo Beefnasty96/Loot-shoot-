@@ -53,6 +53,14 @@ var tp_camera: Camera3D
 var viewmodel: Viewmodel
 var firearm: Firearm
 var knife: Knife
+var vitals: Vitals
+var hitboxes: Array[Hitbox] = []
+var model: CharacterModel:     ## Same as `character` (Melee and others look for `model`).
+	get:
+		return character
+var med_notice := ""
+var med_notice_time := 0.0
+signal player_died(cause: String)
 var active_weapon := "pistol"   ## "pistol" or "knife"; Y switches.
 var _pistol_grips: Array[Node3D] = []
 var _knife_grip: Node3D
@@ -61,6 +69,7 @@ var _recoil_recover := 0.0  ## Degrees of muzzle climb still to settle.
 
 
 func _ready() -> void:
+	add_to_group("player")
 	_build()
 	_apply_view()
 
@@ -69,7 +78,7 @@ func _ready() -> void:
 
 func _build() -> void:
 	collision_layer = 2  # characters; the world stays on layer 1
-	collision_mask = 1
+	collision_mask = 1 | 2 | 32   # world, people, doors
 	_shape = CapsuleShape3D.new()
 	_shape.radius = RADIUS
 	_shape.height = STAND_HEIGHT
@@ -93,6 +102,11 @@ func _build() -> void:
 	pockets[0].place(InvItem.magazine(AmmoDB.get_ammo("45_1_fmj230"), 7), Vector2i.ZERO)
 	pockets[1].place(InvItem.magazine(AmmoDB.get_ammo("45_2_jhp230"), 7), Vector2i.ZERO)
 	pockets[2].place(InvItem.create("painkillers"), Vector2i.ZERO)
+	pockets[3].place(InvItem.create("ifak"), Vector2i.ZERO)
+	# Weapons are items in their own slots: a stock 1911 (loaded, one chambered) and a Ka-Bar.
+	character.equipment.arm(InvItem.pistol(AmmoDB.get_ammo("45_1_fmj230"), 7, true))
+	character.equipment.arm(InvItem.create("kabar"))
+	hitboxes = Npc.build_hitboxes(character, self)
 
 	head = Node3D.new()
 	head.position.y = EYE_STAND
@@ -146,6 +160,14 @@ func _build() -> void:
 	knife.player = self
 	add_child(knife)
 	_knife_grip = knife.build(fp_camera, head, Viewmodel.LAYER, PLAYER_MODEL_LAYER)
+	firearm.bind(character.equipment.get_weapon("sidearm"))
+	character.equipment.weapon_changed.connect(_on_weapon_changed)
+
+	vitals = Vitals.new()
+	vitals.player = self
+	add_child(vitals)
+	vitals.died.connect(_on_died)
+	vitals.treated.connect(func(t): _med_note(t))
 
 
 # ---------------------------------------------------------------- input
@@ -177,6 +199,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_crouch(not crouching)
 	elif event.is_action_pressed("switch_weapon"):
 		switch_weapon()
+	elif event.is_action_pressed("use_meds"):
+		_med_note(vitals.use_meds())
+	elif event.is_action_pressed("toggle_light"):
+		_light_hold = 0.0
 	elif event.is_action_pressed("interact"):
 		var target := interact_target()
 		if target and target.has_method("use"):
@@ -188,23 +214,102 @@ func carried_weight() -> float:
 	var kg := character.equipment.total_weight()
 	if firearm:
 		kg += firearm.carried_weight()
-	if knife:
-		kg += knife.blade.weight_kg
 	return kg
 
 
+var _light_hold := -1.0
+
+
+## Something went into or out of a weapon slot (inventory, pickup, swap).
+func _on_weapon_changed(slot: String) -> void:
+	var eq := character.equipment
+	if slot == "sidearm":
+		firearm.bind(eq.get_weapon("sidearm"))
+	var avail := available_weapons()
+	if active_weapon != "none" and not (active_weapon in avail):
+		_set_weapon(avail[0] if not avail.is_empty() else "none")
+	elif active_weapon == "none" and not avail.is_empty():
+		_set_weapon(avail[0])
+
+
+## Free to shoot/swing: not in a menu, not treating yourself, not dead.
+func can_act() -> bool:
+	return not ui_locked and vitals != null and vitals.using == "" and not vitals.dead
+
+
+func hitbox_rids() -> Array[RID]:
+	var out: Array[RID] = []
+	for hb in hitboxes:
+		out.append(hb.get_rid())
+	return out
+
+
+## Hit by a bullet or a blade (hitboxes on your body report here).
+func take_hit(info: Dictionary) -> void:
+	vitals.take_hit(info)
+	# The hit jolts your view.
+	var k := clampf(info.damage / 25.0, 0.3, 1.5)
+	_turn(randf_range(-2.0, 2.0) * k, randf_range(1.0, 3.0) * k)
+
+
+func _med_note(text: String) -> void:
+	if text == "":
+		return
+	med_notice = text
+	med_notice_time = 2.5
+
+
+func _on_died(cause: String) -> void:
+	ui_locked = true
+	sprinting = false
+	aiming = false
+	viewmodel.visible = false
+	knife.view.visible = false
+	character.start_ragdoll(Vector3.ZERO, Vector3.ZERO, "")
+	view = View.THIRD
+	pitch = -55.0
+	_apply_view()
+	player_died.emit(cause)
+
+
 ## Pistol <-> Ka-Bar (Y). Not mid-reload or mid-swing.
+## What you can draw: "pistol" (something in the holster), "knife" (something in the sheath).
+## Primary long guns slot in here when they arrive.
+func available_weapons() -> Array[String]:
+	var out: Array[String] = []
+	var eq := character.equipment
+	if eq.get_weapon("sidearm"):
+		out.append("pistol")
+	if eq.get_weapon("melee"):
+		out.append("knife")
+	return out
+
+
 func switch_weapon(to := "") -> void:
+	var avail := available_weapons()
 	if to == "":
-		to = "knife" if active_weapon == "pistol" else "pistol"
+		if avail.is_empty():
+			to = "none"
+		else:
+			var i := avail.find(active_weapon)
+			to = avail[(i + 1) % avail.size()]
+	elif to != "none" and not (to in avail):
+		return
 	if to == active_weapon or (firearm and firearm.reloading) or (knife and knife.busy() and knife.phase != Knife.Phase.DRAW):
 		return
+	_set_weapon(to)
+
+
+func _set_weapon(to: String) -> void:
 	active_weapon = to
 	var pistol := to == "pistol"
 	viewmodel.visible = pistol
 	_tp_weapon.visible = pistol
-	knife.set_active(not pistol)
-	if pistol:
+	if knife.active != (to == "knife"):
+		knife.set_active(to == "knife")
+	if to == "none":
+		character.pose_mode = CharacterModel.PoseMode.IDLE
+	elif pistol:
 		character.pose_mode = CharacterModel.PoseMode.PISTOL
 		character.grip_point = _pistol_grips[0]
 		character.grip_right = _pistol_grips[1]
@@ -259,6 +364,26 @@ func _process(delta: float) -> void:
 		var speed := look_speed_deg * (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
 		var inv := -1.0 if Settings.invert_look_y else 1.0
 		_turn(-look.x * speed * delta, -look.y * speed * delta * inv)
+
+	# Pain makes it hard to hold your aim still.
+	if vitals and vitals.felt_pain() > 0.2 and not vitals.dead:
+		var p := vitals.felt_pain()
+		_turn(sin(Time.get_ticks_msec() * 0.011) * p * 3.0 * delta, cos(Time.get_ticks_msec() * 0.007) * p * 2.0 * delta)
+	med_notice_time = maxf(0.0, med_notice_time - delta)
+	# D-pad down: tap = weapon light, hold = bullet paths + ballistics readout.
+	if _light_hold >= 0.0:
+		if Input.is_action_pressed("toggle_light"):
+			_light_hold += delta
+			if _light_hold >= 0.6:
+				Ballistics.debug_enabled = not Ballistics.debug_enabled
+				_light_hold = -1.0
+		else:
+			if active_weapon == "pistol" and not ui_locked:
+				if firearm.has_light():
+					firearm.toggle_light()
+				else:
+					_med_note("No light on this gun")
+			_light_hold = -1.0
 
 	if _recoil_recover > 0.0:
 		var settle := minf(_recoil_recover, delta * 14.0)
@@ -322,7 +447,7 @@ func _physics_process(delta: float) -> void:
 		sprinting = false
 
 	var kg := carried_weight()
-	if sprinting and not Encumbrance.can_sprint(kg):
+	if sprinting and (not Encumbrance.can_sprint(kg) or not vitals.can_sprint()):
 		sprinting = false
 	var speed := walk_speed
 	if crouching:
@@ -331,7 +456,11 @@ func _physics_process(delta: float) -> void:
 		speed = sprint_speed
 	elif aiming:
 		speed = walk_speed * 0.6
-	speed *= Encumbrance.speed_factor(kg)
+	speed *= Encumbrance.speed_factor(kg) * vitals.speed_factor()
+	if vitals.using != "":
+		speed *= 0.5
+	if vitals.dead:
+		speed = 0.0
 
 	var dir := (transform.basis * Vector3(input.x, 0.0, input.y))
 	var target := dir * speed

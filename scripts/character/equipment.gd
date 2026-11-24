@@ -4,6 +4,7 @@ extends RefCounted
 ## listens to `changed` and rebuilds the visuals.
 
 signal changed(slot: String)
+signal weapon_changed(slot: String)
 
 const SLOTS := ["head", "face", "torso_inner", "torso_outer", "vest", "hands", "legs", "feet", "back", "belt", "accessory"]
 const SLOT_NAMES := {
@@ -11,7 +12,32 @@ const SLOT_NAMES := {
 	hands = "Hands", legs = "Legs", feet = "Feet", back = "Back", belt = "Belt", accessory = "Accessory",
 }
 
-var worn: Dictionary = {}   ## slot -> GearInstance
+const WEAPON_SLOTS := ["primary", "sidearm", "melee"]
+const WEAPON_SLOT_NAMES := {primary = "Primary", sidearm = "Holster", melee = "Sheath"}
+
+var worn: Dictionary = {}     ## slot -> GearInstance
+var weapons: Dictionary = {}  ## weapon slot -> InvItem (a gun or a knife)
+
+
+## Put a weapon in its slot; returns whatever was there.
+func arm(item: InvItem) -> InvItem:
+	var slot := item.def.weapon_slot
+	var old: InvItem = weapons.get(slot)
+	weapons[slot] = item
+	weapon_changed.emit(slot)
+	return old
+
+
+func disarm(slot: String) -> InvItem:
+	var old: InvItem = weapons.get(slot)
+	if old:
+		weapons.erase(slot)
+		weapon_changed.emit(slot)
+	return old
+
+
+func get_weapon(slot: String) -> InvItem:
+	return weapons.get(slot)
 
 
 func equip(g: GearInstance) -> GearInstance:
@@ -35,9 +61,11 @@ func get_slot(slot: String) -> GearInstance:
 	return worn.get(slot)
 
 
-## Worn gear plus everything stored in it.
+## Worn gear plus everything stored in it, plus weapons (guns with their magazines).
 func total_weight() -> float:
 	var kg := 0.0
+	for w: InvItem in weapons.values():
+		kg += w.weight()
 	for g: GearInstance in worn.values():
 		kg += g.item.weight_kg
 		for grid: InvGrid in g.grids:

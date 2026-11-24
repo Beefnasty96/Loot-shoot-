@@ -1,4 +1,4 @@
-"""Renders inventory icons (transparent PNG, 64 px per grid square) for gear and the magazine.
+"""Renders inventory icons (transparent PNG, 64 px per grid square) for gear, the magazine and weapons.
 
 Usage: python3 render_icons.py <repo_root>
 """
@@ -139,5 +139,67 @@ def main():
     frame_and_render(sc, [mag], (1, 0.15, 0.1), (1, 1), os.path.join(OUT, "mag_1911.png"))
 
 
+def weapons():
+    """The whole 1911 from the right side (2x1) and the Ka-Bar laid flat (3x1)."""
+    for wid, blend, fp, rot_x in [("m1911", "m1911/m1911.blend", (2, 1), 0.0), ("kabar", "kabar/kabar.blend", (3, 1), -72.0)]:
+        sc = reset()
+        with bpy.data.libraries.load(os.path.join(ROOT, "assets", "weapons", blend)) as (src, dst):
+            dst.objects = list(src.objects)
+        meshes = []
+        for o in dst.objects:
+            if o is None:
+                continue
+            sc.collection.objects.link(o)
+            if o.type == "MESH":
+                meshes.append(o)
+        bpy.context.view_layer.update()
+        for o in meshes:
+            mw = o.matrix_world.copy()
+            o.parent = None
+            o.matrix_world = mw
+        if rot_x != 0.0:
+            from mathutils import Matrix
+            r = Matrix.Rotation(math.radians(rot_x), 4, "X")
+            for o in meshes:
+                o.matrix_world = r @ o.matrix_world
+        frame_and_render(sc, meshes, (1, 0.0, 0.08), fp, os.path.join(OUT, wid + ".png"))
+
+
+PARTS = {  # id: footprint, view direction
+    "barrel_1911_threaded": ((2, 1), (1, 0.0, 0.15)),
+    "supp_45": ((2, 1), (1, 0.0, 0.15)),
+    "grips_1911_rubber": ((1, 1), (1, 0.0, 0.1)),
+    "sights_1911_night": ((1, 1), (0.6, -1.0, 0.5)),
+    "rail_1911": ((1, 1), (1, 0.3, -0.4)),
+    "light_m3": ((1, 1), (1, 0.4, 0.2)),
+}
+
+
+def parts():
+    for pid, (fp, view) in PARTS.items():
+        sc = reset()
+        bpy.ops.import_scene.gltf(filepath=os.path.join(ROOT, "assets", "weapons", "parts", pid + ".glb"))
+        meshes = [o for o in sc.objects if o.type == "MESH"]
+        bpy.context.view_layer.update()
+        for o in meshes:
+            mw = o.matrix_world.copy()
+            o.parent = None
+            o.matrix_world = mw
+        if pid == "grips_1911_rubber":   # one panel is enough for the icon
+            for o in [o for o in meshes if o.name.endswith("L") or "RidgeL" in o.name]:
+                bpy.data.objects.remove(o)
+            meshes = [o for o in sc.objects if o.type == "MESH"]
+        frame_and_render(sc, meshes, view, fp, os.path.join(OUT, pid + ".png"))
+    # Stock parts use the whole-gun picture's look: simple stand-ins.
+    import shutil
+    shutil.copy(os.path.join(OUT, "barrel_1911_threaded.png"), os.path.join(OUT, "barrel_1911_gi.png"))
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 2 and sys.argv[2] == "weapons":
+        weapons()
+        parts()
+    else:
+        main()
+        weapons()
+        parts()
