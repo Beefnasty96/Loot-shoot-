@@ -14,6 +14,7 @@ var rs
 var p
 var shots := 0
 var wall_hits: Array = []
+var far_hits: Array = []
 
 
 func check(cond: bool, what: String) -> void:
@@ -237,18 +238,45 @@ func _process(_d: float) -> bool:
 		for d in dys:
 			mean += d / dys.size()
 		check(dys.size() == 6 and absf(mean) < 12.0, "zeroed at 50 yd: the group centres on the front post (mean %+.1f cm)" % mean)
+		# The 100 yd lane: five lanes, the last target 100 yd out.
+		check(rs.LANES.size() == 5 and absf(float(rs.LANES[4][2]) - 91.44) < 0.01, "the range is 100 yd: lanes at 25 ft and 25 / 50 / 75 / 100 yd")
+		p.global_position = Vector3(-22.0, 0.05, 18.0)
+		p.rotation = Vector3.ZERO
+		p._recoil_recover = 0.0
+		wall_hits.clear()
+		far_hits.clear()
+	if f >= 824 and f < 824 + 4 * 30:
+		var k := (f - 824) % 30
+		if k == 0:
+			var eye: float = p.fp_camera.global_position.y
+			p.rotation = Vector3.ZERO
+			p.pitch = rad_to_deg(atan2(1.30 - eye, 91.44))
+			p._recoil_recover = 0.0
+		if k == 2:
+			Input.action_press("fire")
+		if k == 4:
+			Input.action_release("fire")
+	if f == 824 + 4 * 30 + 20:
+		# The dummy goes over after the first hit; the rest carry on into the berm.
+		var first: Dictionary = far_hits[0] if not far_hits.is_empty() else {}
+		var spread := 0.0
+		for h in far_hits:
+			spread = maxf(spread, Vector2(h.position.x + 22.0, h.position.y - 1.30).length())
+		print("100 yd: first hit %s, all within %.1f in of the aim point" % [first.get("zone", "-"), spread / 0.0254])
+		check(first.get("zone", "") in ["thorax", "stomach"], "first aimed shot hits the 100 yd target in the body")
+		check(spread < 0.2, "and the group stays within 8 in at 100 yd (%.1f in)" % (spread / 0.0254))
 		Input.action_release("aim")
 		p.view = 1
 		p._apply_view()
-	if f == 830:
+	if f == 824 + 4 * 30 + 30:
 		check(p.character.pose_mode == 3, "third person: rifle hold (right hand on the grip, left under the rail)")
 		var lh: Vector3 = p.character.grip_left.global_position
 		var rh: Vector3 = p.character.grip_right.global_position
 		check(lh.distance_to(rh) > 0.25, "hands are apart along the rifle (%.2f m)" % lh.distance_to(rh))
 		Input.action_press("switch_weapon")
-	if f == 834:
+	if f == 824 + 4 * 30 + 34:
 		Input.action_release("switch_weapon")
-	if f == 838:
+	if f == 824 + 4 * 30 + 38:
 		check(p.active_weapon == "pistol" and p.character.pose_mode == 1, "tap Y: on to the 1911")
 		print("%d failure(s)" % fails)
 		quit(1 if fails else 0)
@@ -258,6 +286,9 @@ func _process(_d: float) -> bool:
 func _on_impact(i: Dictionary) -> void:
 	if i.material == "test_wall":
 		wall_hits.append(i)
+	elif i.position.z < -70.0:
+		far_hits.append(i)
+		return
 	elif f > 640:
 		print("  stray impact: %s at %s" % [i.material, i.position])
 

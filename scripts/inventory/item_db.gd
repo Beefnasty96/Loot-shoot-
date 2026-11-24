@@ -55,6 +55,7 @@ static func _ensure() -> void:
 	stanag.mag_capacity = 30
 	stanag.caliber = "5.56 NATO"
 	stanag.mag_family = "stanag"
+	stanag.scene_path = "res://assets/weapons/stanag/stanag.glb"
 	# Weapons and attachments come from WeaponDB. Weight here is the bare weapon/part;
 	# InvItem.weight() adds everything mounted on it.
 	for wid: String in WeaponDB.WEAPONS:

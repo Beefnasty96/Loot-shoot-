@@ -14,7 +14,7 @@ Every push to `main` builds an APK automatically (GitHub Actions, about 5 minute
 
 ## Current step: shooting range (v0.4)
 
-The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a firing lane with target dummies at 25/50/75 ft, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
+The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a 100 yd range with five lanes (targets at 25 ft and 25 / 50 / 75 / 100 yd) running out of the yard, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
 
 | Thor control | Action |
 | --- | --- |
@@ -133,12 +133,13 @@ python3 tools/blender/gear_build.py assets/characters/base/body.blend assets/gea
 python3 tools/blender/render_gear.py assets/characters/base/body.blend assets/gear /tmp/fit.png tshirt,pants,boots
 python3 tools/blender/render_fp.py assets/viewmodels/arms/arms.blend assets/weapons/m1911/m1911.blend /tmp/fp
 python3 tools/blender/m4_import.py assets/weapons/m4a1/source/M4A1_New.blend assets/weapons/m4a1   # M4A1 from the source model
+python3 tools/blender/stanag_build.py assets/weapons/stanag           # 30-round STANAG (also seated in the M4 by m4_import.py)
 python3 tools/blender/arms_build.py assets/viewmodels/arms rifle      # arms holding the M4
 python3 tools/blender/render_fp.py assets/viewmodels/arms/arms_rifle.blend assets/weapons/m4a1/m4a1.blend /tmp/fp 24 rifle
 python3 tools/blender/render_icons.py . m4                            # M4, STANAG and furniture icons
 ```
 
-M4A1: ~10,100 tris, from the source model in `assets/weapons/m4a1/source/` (a low-poly M4A1 "remade from scratch"). `m4_import.py` scales it to real size: 14.5 in barrel (bolt face to muzzle), 33.0 in overall with the stock on its last notch (29.75 in collapsed), 2.5 in wide, 8.45 in tall without a magazine (10.1 in with a 30-rounder), sight line 2.56 in over the bore. It swaps the round handguards for a four-rail handguard (top rail level with the flat-top rail, all four the same height) and names the moving parts for the game: bolt carrier (seen through the open ejection port, locks back on empty), charging handle, selector, trigger, magazine. The carry handle sits on the flat-top rail as its own part, ready to come off for optics. Measurements go to `m4_dims.json`, which the rifle arms are built from.
+M4A1: ~10,100 tris, from Beefnasty96's model in `assets/weapons/m4a1/source/`. `m4_import.py` scales it to real size: 14.5 in barrel (bolt face to muzzle), 33.0 in overall with the stock on its last notch (29.75 in collapsed), 2.5 in wide, 8.45 in tall without a magazine (10.1 in with a 30-rounder), sight line 2.56 in over the bore. It swaps the round handguards for a four-rail handguard (top rail level with the flat-top rail, all four the same height) and names the moving parts for the game: bolt carrier (seen through the open ejection port, locks back on empty), charging handle, selector, trigger, magazine. The carry handle sits on the flat-top rail as its own part, ready to come off for optics. Measurements go to `m4_dims.json`, which the rifle arms are built from. The magazine is our own STANAG model (`stanag_build.py`, ~550 tris): a USGI 30-rounder, ~7.25 in from feed lips to floorplate, 0.88 in wide (1 in over the stiffening ribs), straight where it sits in the well then curving forward, black floorplate, tan follower and the top round showing. Dropped magazines lie on the floor as that model.
 
 First-person arms: 1,120 tris, 34 bones (forearm, hand, 3 per finger), rigid skinning. Rest pose = the gun's grip (two-handed 1911, or M4: right hand on the pistol grip, left under the rail); they share the gun's coordinate space, so both .glb files line up under one parent. Each gun's poses (hip, aim, sprint, reload, recoil, third-person hold) live in its `rig` in WeaponDB.
 

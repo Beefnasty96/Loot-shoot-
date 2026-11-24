@@ -13,7 +13,8 @@ What it does to the source model:
   level with the flat-top rail; side and bottom rails are the same distance out.
 - Game nodes. Parts are joined and renamed for the game: Bolt (bolt + carrier),
   ChargingHandle, Selector, Trigger, Magazine (+ follower), RearSight (the detachable
-  carry handle with its sight), Handguard. Markers: Muzzle, SightRear, SightFront,
+  carry handle with its sight), Handguard. The magazine is replaced by our STANAG
+  (stanag_build.py), seated in the well where the source's sat. Markers: Muzzle, SightRear, SightFront,
   EjectionPort. The loose display cartridge is removed. The dust cover keeps its
   open position (DustCoverOpen; not animated).
 
@@ -167,7 +168,18 @@ bpy.ops.object.mode_set(mode="OBJECT")
 rlo, rhi = bounds([O["rear_sight"]])
 ap_y = (rlo.y + rhi.y) / 2.0          # the flip aperture, before it's joined to the carry handle
 join(["bolt_carrier", "bolt"], "Bolt")
-join(["magazine", "follower"], "Magazine")
+# Magazine: our STANAG model (stanag_build.py) in place of the source's, seated where it sat:
+# feed lips at the same height, centred front-to-back on the same spot in the well.
+src_mag = world_verts(O["magazine"])
+mag_top = max(v.z for v in src_mag)
+top_band = [v for v in src_mag if v.z > mag_top - 0.02]
+mag_y = (min(v.y for v in top_band) + max(v.y for v in top_band)) / 2.0
+for n in ("magazine", "follower"):
+    bpy.data.objects.remove(O[n], do_unlink=True)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import stanag_build  # noqa: E402
+stanag = stanag_build.build_stanag(os.path.join(OUT, "textures"))
+stanag.location = (0.0, mag_y, mag_top)
 join(["carryhandle", "rear_sight_base", "rear_sight"], "RearSight")
 O["charging_handle"].name = "ChargingHandle"
 O["selector"].name = "Selector"
