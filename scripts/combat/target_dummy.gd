@@ -74,9 +74,13 @@ func take_hit(info: Dictionary) -> void:
 	var dmg: float = info.damage
 	model.apply(zone, dmg)
 	_idle = 0.0
-	var ftlb := AmmoType.j_to_ftlb(info.deposited)
-	var outcome := "through" if info.result == "penetrated" else "stopped"
-	_float_text("-%d %s\n%d ft-lb, %s" % [roundi(dmg), ZONE_NAMES.get(zone, zone), roundi(ftlb), outcome], info.position)
+	if info.get("weapon", "") == "blade":
+		var what: String = ("stab, %s deep" % Units.inches(info.depth_mm)) if info.kind == "stab" else ("slash, %s long" % Units.inches(info.length_mm))
+		_float_text("-%d %s\n%s" % [roundi(dmg), ZONE_NAMES.get(zone, zone), what], info.position)
+	else:
+		var ftlb := AmmoType.j_to_ftlb(info.deposited)
+		var outcome := "through" if info.result == "penetrated" else "stopped"
+		_float_text("-%d %s\n%d ft-lb, %s" % [roundi(dmg), ZONE_NAMES.get(zone, zone), roundi(ftlb), outcome], info.position)
 	if model.dead:
 		_reset_timer = 3.0
 		_body.rotation_degrees.x = -80.0  # topple backwards

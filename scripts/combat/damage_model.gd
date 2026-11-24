@@ -9,6 +9,13 @@ extends RefCounted
 ## long the channel is, how vascular the area is, and whether it went through
 ## (two holes). Some hits open a major vessel: an arterial bleed that doesn't
 ## clot. Light bleeds slowly clot. Losing 40% of your blood kills.
+##
+## Blades (make_blade_wound): a STAB is a deep, narrow channel; damage and the
+## chance of opening a vessel or organ grow with depth, clothing soaks up some
+## of the thrust, ribs can deflect it and the skull stops it. A SLASH is a long,
+## shallow incised wound: little damage, but it gapes and bleeds freely (slow
+## to clot), worst across the throat, forearms and wrists. Clothing (a jacket
+## especially) turns a slash into a scratch.
 
 const ZONES := {
 	"head": {max = 35.0, lethal = true},
@@ -96,6 +103,40 @@ static func make_wound(info: Dictionary, rng := RandomNumberGenerator.new()) -> 
 	return {zone = zone, bone = info.get("bone", ""), rate = rate, heavy = heavy, through = through, lost = 0.0}
 
 
+## Skin-surface blood supply for cuts (slashes bleed from skin and muscle, not deep organs).
+const SKIN_VASCULAR := {head = 1.7, thorax = 0.8, stomach = 0.8, arm_l = 1.0, arm_r = 1.0, leg_l = 0.9, leg_r = 0.9}
+## Chance per cm of cut depth (slash, at 2 cm) that a slash opens a vessel: throat, wrists, inner thigh.
+const SLASH_ARTERY := {head = 0.35, thorax = 0.02, stomach = 0.03, arm_l = 0.15, arm_r = 0.15, leg_l = 0.06, leg_r = 0.06}
+## Stabs: how much worse a zone is than the gunshot table (heart/lungs/liver are easy to reach with a blade).
+const STAB_ZONE_DAMAGE := {head = 1.0, thorax = 1.0, stomach = 0.9, arm_l = 0.6, arm_r = 0.6, leg_l = 0.7, leg_r = 0.7}
+
+
+## Wound from a blade. Needs kind ("stab"/"slash"), zone, depth_mm, length_mm; fills info.damage too.
+static func make_blade_wound(info: Dictionary, rng := RandomNumberGenerator.new()) -> Dictionary:
+	var zone: String = info.get("zone", "thorax")
+	var kind: String = info.get("kind", "stab")
+	var depth: float = info.get("depth_mm", 0.0)
+	var length: float = info.get("length_mm", 0.0)
+	var w := {zone = zone, bone = info.get("bone", ""), kind = kind, through = false, lost = 0.0, depth_mm = depth, length_mm = length}
+	if kind == "stab":
+		var heavy_p: float = ARTERY_CHANCE.get(zone, 0.1) * 1.4 * clampf(depth / 100.0, 0.0, 1.6)
+		if zone == "head" and info.get("neck", false):
+			heavy_p = 0.5 * clampf(depth / 60.0, 0.0, 1.0)
+		w.heavy = rng.randf() < heavy_p
+		w.rate = rng.randf_range(12.0, 30.0) if w.heavy else 0.03 * depth * VASCULAR.get(zone, 1.0)
+		var dmg: float = (8.0 + depth * 0.17) * STAB_ZONE_DAMAGE.get(zone, 1.0)
+		if zone == "head":
+			dmg = minf(dmg, 30.0)     # throat/face: deadly through bleeding, not an instant kill
+		info.damage = dmg
+	else:
+		var k := depth / 20.0
+		w.heavy = rng.randf() < SLASH_ARTERY.get(zone, 0.05) * clampf(k, 0.0, 1.5)
+		w.rate = rng.randf_range(10.0, 22.0) if w.heavy else 0.035 * length * clampf(k, 0.15, 1.5) * SKIN_VASCULAR.get(zone, 1.0)
+		w.clot = 220.0             # an open cut keeps bleeding
+		info.damage = 4.0 + depth * 0.3 + length * 0.02
+	return w
+
+
 func add_wound(w: Dictionary) -> void:
 	if dead:
 		w.rate *= DEAD_SEEP
@@ -118,7 +159,7 @@ func tick(delta: float) -> float:
 		lost += ml
 		blood_ml -= ml
 		if not w.heavy:
-			w.rate *= exp(-delta / CLOT_TIME)
+			w.rate *= exp(-delta / w.get("clot", CLOT_TIME))
 	if not dead and blood_fraction() <= 1.0 - LETHAL_LOSS:
 		_kill("blood loss")
 	return lost

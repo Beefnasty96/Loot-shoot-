@@ -60,6 +60,7 @@ func _ready() -> void:
 
 	_build_pause_panel()
 	Ballistics.impact.connect(_on_impact)
+	Ballistics.melee_impact.connect(_on_melee)
 	_load = _label("", 22)
 	_load.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_load.position += Vector2(24, -84)
@@ -99,6 +100,7 @@ func _build_pause_panel() -> void:
 		"Left stick ........ move            Right stick ....... look",
 		"R2 ................ fire            L2 ................ aim down sights",
 		"X ................. reload (hold: check magazine)",
+		"Y ................. switch 1911 / Ka-Bar (knife: R2 slash, L2+R2 stab)",
 		"D-pad left/right .. load for your NEXT magazine",
 		"D-pad down ........ bullet paths + ballistics readout",
 		"R3 ................ first / third person",
@@ -143,6 +145,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 	elif event.is_action_pressed("toggle_debug"):
 		Ballistics.debug_enabled = not Ballistics.debug_enabled
+
+
+func _on_melee(info: Dictionary) -> void:
+	var what: String = info.zone.to_upper() if info.zone != "" else (String(info.material).replace("_", " ") if info.material != "" else "wall")
+	var line := "KA-BAR %s %s" % [info.kind.to_upper(), what]
+	if info.zone != "":
+		if info.kind == "stab":
+			line += ": %s deep" % Units.inches(info.depth_mm)
+		else:
+			line += ": %s long, %s deep" % [Units.inches(info.length_mm), Units.inches(info.depth_mm)]
+		if info.get("cloth_j", 0.0) > 0.0:
+			line += " (through clothing)"
+		line += " -%d HP, %s" % [roundi(info.damage), info.bleed]
+	else:
+		line += ": blade glances off"
+	_hit_lines.push_front(line)
+	if _hit_lines.size() > 6:
+		_hit_lines.resize(6)
 
 
 func _on_impact(info: Dictionary) -> void:
@@ -191,7 +211,14 @@ func _process(_delta: float) -> void:
 	_crosshair.visible = not get_tree().paused and not player.aiming and not player.preview and not inventory.is_open()
 
 	var f := player.firearm
-	if f:
+	if player.active_weapon == "knife":
+		_ammo_big.text = "KA-BAR"
+		var lines := ["R2: slash     L2 + R2: stab", "Y: back to the 1911"]
+		if player.knife.blood > 0.05:
+			lines.push_front("Blade %s" % ("bloody" if player.knife.blood > 0.5 else "stained"))
+		_ammo_info.text = "\n".join(lines)
+		_mag_check.text = ""
+	elif f:
 		var mag := str(f.mag_count) if f.has_mag else "-"
 		var chamber := " + 1" if f.chambered else " + 0"
 		_ammo_big.text = mag + chamber

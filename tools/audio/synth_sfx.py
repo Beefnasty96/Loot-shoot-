@@ -119,3 +119,38 @@ f = 2400 * np.exp(-tt * 2.2) + 600
 phase = 2 * np.pi * np.cumsum(f) / SR
 rico = np.sin(phase) * np.exp(-tt / 0.22) * 0.6 + highpass(noise(0.6), 3000) * env(len(tt), 0.0002, 0.01)
 save("ricochet.wav", rico, 0.55)
+
+
+# --- Ka-Bar: swish (air past the blade), flesh stab / slash, blade on hard surface, draw from sheath.
+def sweep_noise(sec, f0, f1, q=0.25):
+    """Noise through a band-pass whose centre slides from f0 to f1 (a blade cutting air)."""
+    n = noise(sec)
+    out_ = np.zeros_like(n)
+    lo, hi = 0.0, 0.0
+    for i, v in enumerate(n):
+        f = f0 + (f1 - f0) * i / len(n)
+        a = np.exp(-2 * np.pi * f / SR)
+        b = np.exp(-2 * np.pi * f * (1 + q) / SR)
+        lo = (1 - a) * v + a * lo
+        hi = (1 - b) * v + b * hi
+        out_[i] = hi - lo
+    return out_
+
+
+tt = np.arange(int(SR * 0.28)) / SR
+sw = sweep_noise(0.28, 700, 2600) * np.sin(np.pi * np.clip(tt / 0.28, 0, 1)) ** 2
+save("knife_swish.wav", pad(sw, 0.3), 0.55)
+sw2 = sweep_noise(0.18, 1200, 3200) * np.sin(np.pi * np.clip(np.arange(int(SR * 0.18)) / SR / 0.18, 0, 1)) ** 2
+save("knife_thrust.wav", pad(sw2, 0.2), 0.5)
+
+wet = lowpass(noise(0.22), 900) * env(int(SR * 0.22), 0.004, 0.05)
+squelch = lowpass(noise(0.22), 2200) * env(int(SR * 0.22), 0.03, 0.04) * 0.5
+save("knife_stab_flesh.wav", pad(mix(wet * 1.5, squelch, ring(85, 0.2, 0.05, 0.9)), 0.28), 0.75)
+
+tear = highpass(noise(0.16), 1200) * env(int(SR * 0.16), 0.002, 0.035)
+save("knife_slash_flesh.wav", pad(mix(tear, lowpass(noise(0.16), 700) * env(int(SR * 0.16), 0.002, 0.03) * 0.8), 0.2), 0.65)
+
+save("knife_hit_hard.wav", pad(mix(burst(0.04, 2500, 0.0002, 0.005), ring(3600, 0.35, 0.07, 0.6), ring(5100, 0.25, 0.04, 0.35)), 0.4), 0.6)
+
+scrape = sweep_noise(0.35, 2500, 4500, 0.15) * env(int(SR * 0.35), 0.05, 0.25)
+save("knife_draw.wav", pad(mix(scrape, ring(4200, 0.3, 0.05, 0.15)), 0.4), 0.45)

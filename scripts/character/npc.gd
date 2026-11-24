@@ -147,6 +147,14 @@ func _bleed(delta: float) -> void:
 		if ml <= 0.0:
 			continue
 		Ballistics.blood.grow_stain(w)
+		if w.heavy and not dead and w.rate > 0.0:   # arterial: pumps with the heartbeat
+			w.spurt_t = w.get("spurt_t", 0.0) - delta
+			if w.spurt_t <= 0.0:
+				w.spurt_t = 0.75
+				var m: Array = w.get("marks", [])
+				if not m.is_empty() and is_instance_valid(m[0]):
+					var mk := m[0] as Node3D
+					Ballistics.blood.spurt(mk.global_position, mk.global_transform.basis.y.normalized(), w.rate)
 		w.drip_acc = w.get("drip_acc", 0.0) + ml
 		if w.drip_acc >= maxf(1.5, w.rate * 0.25):
 			var marks: Array = w.get("marks", [])
@@ -195,7 +203,7 @@ func _act_wounded(delta: float) -> void:
 func take_hit(info: Dictionary) -> void:
 	var dir: Vector3 = info.get("direction", -global_transform.basis.z)
 	var push := hit_impulse(info)
-	var wound := DamageModel.make_wound(info)
+	var wound: Dictionary = info.wound if info.has("wound") else DamageModel.make_wound(info)
 	damage.add_wound(wound)
 	Ballistics.blood.hit(info, wound)
 	info.bleed = ("ARTERIAL BLEED " if wound.heavy else "bleed ") + "%.1f ml/s" % wound.rate
