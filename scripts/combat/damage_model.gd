@@ -16,6 +16,14 @@ extends RefCounted
 ## shallow incised wound: little damage, but it gapes and bleeds freely (slow
 ## to clot), worst across the throat, forearms and wrists. Clothing (a jacket
 ## especially) turns a slash into a scratch.
+##
+## Organs and bones (Anatomy): a wound path that crosses the brain or brainstem
+## kills outright; the heart stops within seconds; a major vessel bleeds
+## arterially; lungs fill and you can't get your breath; liver, spleen, kidneys
+## and gut bleed inside where no bandage reaches; the spinal cord paralyses
+## (neck: everything, and breathing stops); a broken bone takes the limb out.
+## Only paths that miss every major vessel are spared an arterial bleed now -
+## no more dice roll for gunshots.
 
 const ZONES := {
 	"head": {max = 35.0, lethal = true},
@@ -42,6 +50,21 @@ var blood_max := 5000.0
 var blood_ml := 5000.0
 var wounds: Array[Dictionary] = []
 var _dead_time := 0.0
+## What the organs and bones have taken (apply_organs).
+var injuries: Array[String] = []      ## Readable, in the order they happened.
+var broken := {}                      ## limb ("arm_l", "leg_r", "pelvis") -> true
+var legs_paralysed := false
+var arms_paralysed := false
+var lungs_hit := {}                   ## "lung_l"/"lung_r" -> true
+var cardiac_t := -1.0                 ## Seconds until the heart stops (-1 = it won't).
+var breath_t := -1.0                  ## Seconds until breathing stops for good (neck cord).
+
+## Extra damage per organ kind on top of the energy dumped (the zone HP).
+## (The heart and big vessels kill through the bleed and the heart stopping, not
+## on impact: people shot through the heart can keep going for several seconds.)
+const ORGAN_DAMAGE := {cns = 0.0, cord = 25.0, heart = 15.0, vessel = 5.0, lung = 12.0, organ = 10.0, bone = 8.0}
+## Head hits that miss the brain and brainstem don't kill outright (jaw, face, scalp).
+const HEAD_MISS_CAP := 30.0
 
 
 func _init() -> void:
@@ -52,6 +75,13 @@ func reset() -> void:
 	dead = false
 	cause = ""
 	wounds.clear()
+	injuries.clear()
+	broken.clear()
+	lungs_hit.clear()
+	legs_paralysed = false
+	arms_paralysed = false
+	cardiac_t = -1.0
+	breath_t = -1.0
 	blood_ml = blood_max
 	for z: String in ZONES:
 		hp[z] = ZONES[z].max
@@ -94,6 +124,8 @@ static func make_wound(info: Dictionary, rng := RandomNumberGenerator.new()) -> 
 	var through: bool = info.get("result", "") == "penetrated"
 	var path_cm: float = (info.get("thickness_mm", 0.0) if through else info.get("depth_mm", 0.0)) / 10.0
 	var artery_p: float = ARTERY_CHANCE.get(zone, 0.1) * clampf(ratio, 1.0, 2.0) * clampf(path_cm / 20.0, 0.3, 1.0)
+	if info.has("organs"):
+		artery_p = 0.0      # the anatomy decides: vessels on the path bleed (apply_organs)
 	var heavy := rng.randf() < artery_p
 	var rate: float
 	if heavy:
@@ -122,6 +154,8 @@ static func make_blade_wound(info: Dictionary, rng := RandomNumberGenerator.new(
 		var heavy_p: float = ARTERY_CHANCE.get(zone, 0.1) * 1.4 * clampf(depth / 100.0, 0.0, 1.6)
 		if zone == "head" and info.get("neck", false):
 			heavy_p = 0.5 * clampf(depth / 60.0, 0.0, 1.0)
+		if info.has("organs"):
+			heavy_p = 0.0     # the anatomy decides which vessels the blade reaches
 		w.heavy = rng.randf() < heavy_p
 		w.rate = rng.randf_range(12.0, 30.0) if w.heavy else 0.03 * depth * VASCULAR.get(zone, 1.0)
 		var dmg: float = (8.0 + depth * 0.17) * STAB_ZONE_DAMAGE.get(zone, 1.0)
@@ -137,6 +171,78 @@ static func make_blade_wound(info: Dictionary, rng := RandomNumberGenerator.new(
 	return w
 
 
+## What the organs and bones on a wound path do (info.organs from Anatomy.trace).
+## Call before apply(): it adds the organ damage to info.damage (and caps head hits
+## that miss the brain), opens the internal bleeds and sets the lasting effects.
+func apply_organs(info: Dictionary, rng := RandomNumberGenerator.new()) -> void:
+	var organs: Array = info.get("organs", [])
+	var cns := false
+	var extra := 0.0
+	var names: Array[String] = []
+	for h: Dictionary in organs:
+		extra += ORGAN_DAMAGE.get(h.kind, 0.0)
+		var bleed: float = float(h.extra.get("bleed", 0.0)) * rng.randf_range(0.8, 1.2)
+		match h.kind:
+			"cns":
+				cns = true
+				_kill(h.name)
+			"cord":
+				legs_paralysed = true
+				if h.extra.get("limb", "") == "all":
+					arms_paralysed = true
+					breath_t = 20.0 if breath_t < 0.0 else breath_t
+			"heart":
+				_internal(h, bleed, true)
+				var t := rng.randf_range(8.0, 14.0)
+				cardiac_t = t if cardiac_t < 0.0 else minf(cardiac_t, t)
+			"vessel":
+				# Limb and neck vessels can be packed or tourniqueted; chest and belly ones can't.
+				var w := _internal(h, bleed, true)
+				w.internal = h.zone in ["thorax", "stomach"]
+			"lung":
+				lungs_hit[h.id] = true
+				_internal(h, bleed, false)
+			"organ":
+				_internal(h, bleed, false)
+			"bone":
+				var limb: String = h.extra.get("limb", "")
+				if limb != "":
+					broken[limb] = true
+		var label: String = ("broken " + h.name) if h.kind == "bone" and h.id != "skull" else ("fractured skull" if h.id == "skull" else h.name)
+		if not (label in names):
+			names.append(label)
+		if not (label in injuries):
+			injuries.append(label)
+	info.organ_names = names
+	info.damage = float(info.get("damage", 0.0)) + extra
+	if info.get("zone", "") == "head" and not cns and info.has("organs"):
+		info.damage = minf(info.damage, HEAD_MISS_CAP)
+
+
+## The bleed readout for a hit: the wound plus whatever the organs opened.
+static func bleed_text(info: Dictionary, wound: Dictionary) -> String:
+	var t := ("ARTERIAL BLEED " if wound.heavy else "bleed ") + "%.1f ml/s" % wound.rate
+	var names: Array = info.get("organ_names", [])
+	if not names.is_empty():
+		t += "; " + ", ".join(names).to_upper()
+	return t
+
+
+## An internal (or arterial) bleed from an organ on the path.
+func _internal(h: Dictionary, rate: float, heavy: bool) -> Dictionary:
+	var w := {zone = h.zone, bone = "", rate = rate, heavy = heavy, through = false, lost = 0.0,
+		internal = true, organ = h.id, clot = 900.0}
+	add_wound(w)
+	return w
+
+
+## How well they can breathe: 1 normal, one lung hit ~0.6, both ~0.15, 0 when it's stopped.
+func breathing() -> float:
+	if breath_t >= 0.0:
+		return 0.0
+	return [1.0, 0.6, 0.15][mini(lungs_hit.size(), 2)]
+
+
 func add_wound(w: Dictionary) -> void:
 	if dead:
 		w.rate *= DEAD_SEEP
@@ -150,6 +256,14 @@ func tick(delta: float) -> float:
 	if dead:
 		_dead_time += delta
 		seep = exp(-_dead_time / 25.0)
+	if not dead and cardiac_t >= 0.0:
+		cardiac_t -= delta
+		if cardiac_t <= 0.0:
+			_kill("heart stopped")
+	if not dead and breath_t >= 0.0:
+		breath_t -= delta
+		if breath_t <= 0.0:
+			_kill("stopped breathing")
 	for w: Dictionary in wounds:
 		if w.rate <= 0.001:
 			continue
@@ -165,27 +279,53 @@ func tick(delta: float) -> float:
 	return lost
 
 
-## 0..1 of a zone's health lost.
+## 0..1 of a zone's health lost. A broken or paralysed limb counts as gone.
 func hurt(zone: String) -> float:
+	if broken.get(zone, false):
+		return 1.0
+	if (legs_paralysed and zone.begins_with("leg")) or (arms_paralysed and zone.begins_with("arm")):
+		return 1.0
 	return 1.0 - hp.get(zone, 1.0) / ZONES[zone].max if ZONES.has(zone) else 0.0
 
 
 ## Blood loss as 0 (fine) .. 1 (about to pass out): starts at 10% lost, full at 35%.
 func shock() -> float:
-	return clampf((1.0 - blood_fraction() - 0.1) / 0.25, 0.0, 1.0)
+	var s := clampf((1.0 - blood_fraction() - 0.1) / 0.25, 0.0, 1.0)
+	if cardiac_t >= 0.0:
+		s = maxf(s, 1.0 - cardiac_t / 14.0)   # the heart failing: fading fast
+	return clampf(s + (1.0 - breathing()) * 0.35, 0.0, 1.0)
 
 
 ## Movement speed multiplier from leg wounds and blood loss (for AI and the player).
 func mobility() -> float:
 	var legs := maxf(hurt("leg_l"), hurt("leg_r"))
 	var m := 1.0 - legs * 0.6 - minf(hurt("leg_l"), hurt("leg_r")) * 0.3
+	if legs_paralysed:
+		return 0.0
+	if broken.get("pelvis", false):
+		m *= 0.25
+	if broken.get("leg_l", false) or broken.get("leg_r", false):
+		m *= 0.35      # hopping or crawling on a broken leg
+	m *= 0.5 + 0.5 * breathing()
 	return clampf(m * (1.0 - shock() * 0.5), 0.0, 1.0)
 
 
 ## Aim steadiness 0..1 from arm wounds, pain and blood loss.
 func steadiness() -> float:
 	var arms := maxf(hurt("arm_l"), hurt("arm_r"))
-	return clampf(1.0 - arms * 0.5 - shock() * 0.4 - hurt("head") * 0.3, 0.1, 1.0)
+	var s := 1.0 - arms * 0.5 - shock() * 0.4 - hurt("head") * 0.3
+	if arms_paralysed:
+		s = 0.0
+	return clampf(s * (0.6 + 0.4 * breathing()), 0.1, 1.0)
+
+
+## Bleeding inside the body (ml/s) that no field dressing stops.
+func internal_bleed_rate() -> float:
+	var r := 0.0
+	for w: Dictionary in wounds:
+		if w.get("internal", false):
+			r += w.rate
+	return r
 
 
 func bleed_rate() -> float:
@@ -199,17 +339,25 @@ func blood_fraction() -> float:
 	return blood_ml / blood_max if blood_max > 0.0 else 1.0
 
 
-func is_bleeding_heavily() -> bool:
+## Any arterial bleed; outside_only = only ones a tourniquet / packing can reach.
+func is_bleeding_heavily(outside_only := false) -> bool:
 	for w: Dictionary in wounds:
-		if w.heavy and w.rate > 0.0:
+		if w.heavy and w.rate > 0.0 and not (outside_only and w.get("internal", false)):
 			return true
 	return false
+
+
+## Bleed rate (ml/s) from wounds a dressing can reach.
+func external_bleed_rate() -> float:
+	return bleed_rate() - internal_bleed_rate()
 
 
 ## Medical treatment: stop light bleeds; `heavy_too` (tourniquet/chest seal) also stops arterial ones.
 func treat(heavy_too: bool) -> int:
 	var n := 0
 	for w: Dictionary in wounds:
+		if w.get("internal", false):
+			continue   # bleeding inside the chest or belly: needs a surgeon
 		if w.rate > 0.0 and (heavy_too or not w.heavy):
 			w.rate = 0.0
 			n += 1

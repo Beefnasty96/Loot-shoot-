@@ -40,14 +40,15 @@ func take_hit(info: Dictionary) -> void:
 	var wound: Dictionary = info.wound if info.has("wound") else DamageModel.make_wound(info)
 	damage.add_wound(wound)
 	Ballistics.blood.hit(info, wound)
-	info.bleed = ("ARTERIAL BLEED " if wound.heavy else "bleed ") + "%.1f ml/s" % wound.rate
+	damage.apply_organs(info)
+	info.bleed = DamageModel.bleed_text(info, wound)
 	damage.apply(info.zone, info.damage)
 	pain = clampf(pain + info.damage / 35.0, 0.0, 1.0)
 	flash = 1.0
 	_cancel_use()
 	hurt.emit(info)
 	if damage.dead:
-		_die("killed (%s)" % String(info.zone).replace("_", " "))
+		_die(("killed: %s" % damage.cause) if damage.cause != "wound" else "killed (%s)" % String(info.zone).replace("_", " "))
 
 
 func _process(delta: float) -> void:
@@ -60,7 +61,7 @@ func _process(delta: float) -> void:
 		damage.tick(delta)
 		_drips(delta, before - damage.blood_ml)
 		if damage.dead:
-			_die("bled out")
+			_die("bled out" if damage.cause == "blood loss" else damage.cause)
 			return
 	var base := clampf((maxf(damage.hurt("thorax"), damage.hurt("stomach")) + damage.hurt("head") + maxf(damage.hurt("leg_l"), damage.hurt("leg_r")) + maxf(damage.hurt("arm_l"), damage.hurt("arm_r"))) * 0.5, 0.0, 0.8)
 	pain = move_toward(pain, base, delta * 0.12)
@@ -96,7 +97,8 @@ func speed_factor() -> float:
 
 
 func can_sprint() -> bool:
-	return maxf(damage.hurt("leg_l"), damage.hurt("leg_r")) < 0.5 and damage.shock() < 0.5 and using == ""
+	return maxf(damage.hurt("leg_l"), damage.hurt("leg_r")) < 0.5 and damage.shock() < 0.5 and damage.breathing() > 0.8 \
+		and not damage.broken.get("pelvis", false) and using == ""
 
 
 ## Extra spread/sway from arm wounds, pain and blood loss (0 = steady).
@@ -117,16 +119,16 @@ func use_meds() -> String:
 	if dead or using != "":
 		return ""
 	var want: Array = []
-	if damage.is_bleeding_heavily():
+	if damage.is_bleeding_heavily(true):
 		want = ["ifak"]
-	elif damage.bleed_rate() > 0.05:
+	elif damage.external_bleed_rate() > 0.05:
 		want = ["medkit", "ifak"]
 	elif _hp_missing() > 10.0:
 		want = ["medkit"]
 	if felt_pain() > 0.3 and painkiller_time <= 0.0:
 		want.append("painkillers")
 	if want.is_empty():
-		return "Nothing to treat"
+		return "Bleeding inside - a dressing won't stop it" if damage.internal_bleed_rate() > 0.05 else "Nothing to treat"
 	for id: String in want:
 		var found := _find(id)
 		if not found.is_empty():

@@ -9,6 +9,8 @@ const LAYER := 4  ## Physics layer 3.
 @export var gel_factor := 1.0  ## Tissue/bone density relative to gel (skull and ribs > 1).
 var receiver: Node
 var bone_name := ""  ## Skeleton bone this box rides on (for hit reactions).
+var to_rig := Transform3D()   ## This box's local space -> the rig's rest pose (Anatomy).
+var has_anatomy := false      ## Organs and bones inside (people and the range dummies).
 
 
 func _init() -> void:
