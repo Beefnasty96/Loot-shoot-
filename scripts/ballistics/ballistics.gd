@@ -248,6 +248,11 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 		var thickness := _thickness(p, dir, collider, b)
 		var needed := INF if thickness < 0.0 else thickness * 1000.0 * gel_factor
 		info.thickness_mm = maxf(thickness, 0.0) * 1000.0
+		# Organs and bones on the way through (bones also soak up penetration).
+		var organs: Array[Dictionary] = []
+		if hitbox and hitbox.has_anatomy and thickness > 0.0:
+			organs = Anatomy.trace(hitbox, p, dir, thickness)
+			needed += Anatomy.bone_gel_mm(organs) * gel_factor / maxf(hitbox.gel_factor, 0.01)
 		if ammo.yaws():
 			var r := _rifle_path(b, speed, needed, gel_factor, soft_tissue, props.hard)
 			capacity = r.capacity
@@ -255,7 +260,7 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 			info.yaw = r.yaw
 		if capacity <= needed:
 			info.result = "stopped"
-			info.depth_mm = capacity / gel_factor
+			info.depth_mm = minf(capacity / gel_factor, info.thickness_mm)
 			out.stop_pos = p + dir * (info.depth_mm / 1000.0)
 			b.alive = false
 		else:
@@ -272,6 +277,13 @@ func _interact(b: Bullet, hit: Dictionary) -> Dictionary:
 			info.result = "penetrated"
 			out.exit_pos = p + dir * thickness
 			info.exit_pos = out.exit_pos
+		if hitbox and hitbox.has_anatomy:
+			# Only what it reached: a bullet that stops short spares what's beyond.
+			var reached: Array[Dictionary] = []
+			for h in organs:
+				if info.result == "penetrated" or h.at_mm < info.depth_mm:
+					reached.append(h)
+			info.organs = reached
 
 	var e_out := ammo.energy_j(b.vel.length()) * b.mass_frac if b.alive else 0.0
 	info.energy_out = e_out

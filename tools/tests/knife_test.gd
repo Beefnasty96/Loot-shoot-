@@ -83,7 +83,7 @@ func _process(_d: float) -> bool:
 			var h: Dictionary = hits[-1]
 			print("      stab %s %.0f mm deep, -%d HP, %s" % [h.zone, h.depth_mm, h.damage, h.bleed])
 			check(h.depth_mm > 50.0, "and goes deep")
-		check(n.damage.wounds.size() == 1 and n.damage.wounds[0].kind == "stab", "it leaves a stab wound")
+		check(not n.damage.wounds.is_empty() and n.damage.wounds[0].get("kind", "") == "stab", "it leaves a stab wound (plus whatever organs it reached: %d wounds)" % n.damage.wounds.size())
 		check(n.damage.wounds[0].has("marks") and n.damage.wounds[0].marks.size() == 2, "a slit and stain on the body")
 		check(p.knife.blood > 0.3, "blood on the blade")
 		check(Ballistics_puddles() > 0.0, "blood spills onto the floor")

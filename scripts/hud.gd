@@ -183,6 +183,17 @@ func _update_body() -> void:
 	var b := v.bleeding()
 	if b != "":
 		lines.append(b)
+	var dm: DamageModel = v.damage
+	if dm.internal_bleed_rate() > 0.05:
+		lines.append("BLEEDING INSIDE")
+	if dm.breath_t >= 0.0:
+		lines.append("Can't breathe")
+	elif dm.breathing() < 0.9:
+		lines.append("Short of breath" if dm.breathing() > 0.3 else "Struggling to breathe")
+	if dm.legs_paralysed:
+		lines.append("Can't feel your legs")
+	for inj: String in dm.injuries.slice(maxi(0, dm.injuries.size() - 4)):
+		lines.append(inj.substr(0, 1).to_upper() + inj.substr(1))
 	var blood := v.damage.blood_fraction()
 	if blood < 0.995:
 		lines.append("Blood %d%%" % roundi(blood * 100.0))

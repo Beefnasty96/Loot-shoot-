@@ -16,6 +16,10 @@ extends CharacterBody3D
 ## Bleeding: each hit opens a wound (DamageModel) that bleeds onto their clothes
 ## and drips onto the floor, pooling where they stand or lie. At 40% lost they die.
 ##
+## Organs and bones (Anatomy): a brain or brainstem hit drops them dead; the heart
+## stops within seconds; spinal cord hits paralyse (they collapse); a broken leg or
+## pelvis puts them on the ground, a broken arm hangs; lung hits leave them gasping.
+##
 ## Wounded but alive, they show it: limp off a hurt leg, a shot arm hangs, a hand
 ## presses on the worst wound, they hunch over torso wounds and breathe hard, go
 ## pale and droop as they lose blood, and go down on a knee or onto the ground
@@ -35,6 +39,8 @@ const HITBOXES := [
 	["leg_l", "LeftLowerLeg", Vector3(0.165, 0.29, 0.0), Vector3(0.12, 0.42, 0.13), 1.0],
 	["leg_r", "RightUpperLeg", Vector3(-0.12, 0.715, 0.0), Vector3(0.15, 0.43, 0.17), 1.0],
 	["leg_r", "RightLowerLeg", Vector3(-0.165, 0.29, 0.0), Vector3(0.12, 0.42, 0.13), 1.0],
+	["leg_l", "LeftFoot", Vector3(0.187, 0.04, 0.05), Vector3(0.10, 0.08, 0.26), 1.0],
+	["leg_r", "RightFoot", Vector3(-0.187, 0.04, 0.05), Vector3(0.10, 0.08, 0.26), 1.0],
 ]
 const LOOT := [  # id, weight
 	["cash", 25], ["painkillers", 15], ["water", 10], ["beans", 10], ["ifak", 5], ["docs", 3],
@@ -128,6 +134,8 @@ static func build_hitboxes(model: CharacterModel, receiver: Node) -> Array[Hitbo
 		hb.gel_factor = h[4]
 		hb.receiver = receiver
 		hb.bone_name = h[1]
+		hb.to_rig = Transform3D(Basis(), h[2])   # the box is placed at its rest centre, rig-aligned
+		hb.has_anatomy = true
 		var cs := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
 		shape.size = h[3]
@@ -140,7 +148,13 @@ static func build_hitboxes(model: CharacterModel, receiver: Node) -> Array[Hitbo
 	return out
 
 
+var _xray := false
+
+
 func _process(delta: float) -> void:
+	if Ballistics.debug_enabled != _xray:   # debug view: see the organs and bones inside
+		_xray = Ballistics.debug_enabled
+		Anatomy.set_xray(_hitboxes, _xray)
 	_bleed(delta)
 	_act_wounded(delta)
 	if dead or _stagger.length_squared() < 1e-6:
@@ -169,8 +183,8 @@ func _bleed(delta: float) -> void:
 	for i in damage.wounds.size():
 		var w: Dictionary = damage.wounds[i]
 		var ml: float = w.lost - before[i]
-		if ml <= 0.0:
-			continue
+		if ml <= 0.0 or w.get("internal", false):
+			continue   # bleeding inside: none of it reaches their clothes or the floor
 		Ballistics.blood.grow_stain(w)
 		if w.heavy and not dead and w.rate > 0.0:   # arterial: pumps with the heartbeat
 			w.spurt_t = w.get("spurt_t", 0.0) - delta
@@ -201,6 +215,7 @@ func _act_wounded(delta: float) -> void:
 	h.torso = move_toward(h.torso, maxf(damage.hurt("thorax"), damage.hurt("stomach")), delta * 2.0)
 	var shock := damage.shock()
 	var base := clampf((h.torso + h.head + maxf(h.leg_l, h.leg_r) + maxf(h.arm_l, h.arm_r)) * 0.5, 0.0, 0.8)
+	base = maxf(base, damage.pain_floor())
 	pain = move_toward(pain, base, delta * 0.15)
 	model.pain = pain
 	model.shock = move_toward(model.shock, shock, delta * 0.5)
@@ -231,7 +246,9 @@ func take_hit(info: Dictionary) -> void:
 	var wound: Dictionary = info.wound if info.has("wound") else DamageModel.make_wound(info)
 	damage.add_wound(wound)
 	Ballistics.blood.hit(info, wound)
-	info.bleed = ("ARTERIAL BLEED " if wound.heavy else "bleed ") + "%.1f ml/s" % wound.rate
+	if not dead:
+		damage.apply_organs(info)
+	info.bleed = DamageModel.bleed_text(info, wound)
 	if dead:
 		model.apply_ragdoll_impulse(dir * push, info.position, info.bone)
 		return
