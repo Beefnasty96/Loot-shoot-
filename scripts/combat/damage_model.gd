@@ -52,7 +52,8 @@ var wounds: Array[Dictionary] = []
 var _dead_time := 0.0
 ## What the organs and bones have taken (apply_organs).
 var injuries: Array[String] = []      ## Readable, in the order they happened.
-var broken := {}                      ## limb ("arm_l", "leg_r", "pelvis") -> true
+var broken := {}                      ## limb ("arm_l", "leg_r", "pelvis", "foot_l") -> true
+var joints := {}                      ## shattered joint id ("knee_l", "elbow_r", "ankle_l") -> true
 var legs_paralysed := false
 var arms_paralysed := false
 var lungs_hit := {}                   ## "lung_l"/"lung_r" -> true
@@ -62,7 +63,7 @@ var breath_t := -1.0                  ## Seconds until breathing stops for good 
 ## Extra damage per organ kind on top of the energy dumped (the zone HP).
 ## (The heart and big vessels kill through the bleed and the heart stopping, not
 ## on impact: people shot through the heart can keep going for several seconds.)
-const ORGAN_DAMAGE := {cns = 0.0, cord = 25.0, heart = 15.0, vessel = 5.0, lung = 12.0, organ = 10.0, bone = 8.0}
+const ORGAN_DAMAGE := {cns = 0.0, cord = 25.0, heart = 15.0, vessel = 5.0, lung = 12.0, organ = 10.0, bone = 8.0, joint = 14.0}
 ## Head hits that miss the brain and brainstem don't kill outright (jaw, face, scalp).
 const HEAD_MISS_CAP := 30.0
 
@@ -77,6 +78,7 @@ func reset() -> void:
 	wounds.clear()
 	injuries.clear()
 	broken.clear()
+	joints.clear()
 	lungs_hit.clear()
 	legs_paralysed = false
 	arms_paralysed = false
@@ -204,11 +206,19 @@ func apply_organs(info: Dictionary, rng := RandomNumberGenerator.new()) -> void:
 				_internal(h, bleed, false)
 			"organ":
 				_internal(h, bleed, false)
-			"bone":
+			"bone", "joint":
 				var limb: String = h.extra.get("limb", "")
 				if limb != "":
 					broken[limb] = true
-		var label: String = ("broken " + h.name) if h.kind == "bone" and h.id != "skull" else ("fractured skull" if h.id == "skull" else h.name)
+				if h.kind == "joint":
+					joints[h.id] = true
+		var label: String = h.name
+		if h.id == "skull":
+			label = "fractured skull"
+		elif h.kind == "bone":
+			label = "broken " + h.name
+		elif h.kind == "joint":
+			label = "shattered " + h.name
 		if not (label in names):
 			names.append(label)
 		if not (label in injuries):
@@ -283,9 +293,20 @@ func tick(delta: float) -> float:
 func hurt(zone: String) -> float:
 	if broken.get(zone, false):
 		return 1.0
+	var base: float = 1.0 - hp.get(zone, 1.0) / ZONES[zone].max if ZONES.has(zone) else 0.0
+	if zone.begins_with("leg") and broken.get("foot" + zone.substr(3), false):
+		base = maxf(base, 0.6)    # a broken foot: a bad limp, no running
 	if (legs_paralysed and zone.begins_with("leg")) or (arms_paralysed and zone.begins_with("arm")):
 		return 1.0
-	return 1.0 - hp.get(zone, 1.0) / ZONES[zone].max if ZONES.has(zone) else 0.0
+	return base
+
+
+## Pain that won't settle below this: shattered joints are agony, breaks hurt.
+func pain_floor() -> float:
+	var breaks := 0
+	for k: String in broken:
+		breaks += 1
+	return clampf(joints.size() * 0.3 + (breaks - joints.size()) * 0.12, 0.0, 0.85)
 
 
 ## Blood loss as 0 (fine) .. 1 (about to pass out): starts at 10% lost, full at 35%.
@@ -305,7 +326,9 @@ func mobility() -> float:
 	if broken.get("pelvis", false):
 		m *= 0.25
 	if broken.get("leg_l", false) or broken.get("leg_r", false):
-		m *= 0.35      # hopping or crawling on a broken leg
+		m *= 0.35      # hopping or crawling on a broken leg (femur, tibia, shattered knee or ankle)
+	elif broken.get("foot_l", false) and broken.get("foot_r", false):
+		m *= 0.5       # both feet broken: shuffling
 	m *= 0.5 + 0.5 * breathing()
 	return clampf(m * (1.0 - shock() * 0.5), 0.0, 1.0)
 

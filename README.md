@@ -197,7 +197,7 @@ What you see: entry and exit holes and a stain that spreads on clothes as the wo
 
 ## Organs and bones
 
-Everyone - you, enemies, the range civilians and the target dummies - has organs, major vessels and bones inside (`scripts/combat/anatomy.gd`), laid out in the rig's rest pose and carried by the hitboxes. Every bullet and stab traces its actual path through them; a bullet that stops short spares what's beyond it.
+Everyone - you, enemies, the range civilians and the target dummies - has organs, major vessels, bones and joints inside (people have feet now too: a hitbox on each foot) (`scripts/combat/anatomy.gd`), laid out in the rig's rest pose and carried by the hitboxes. Every bullet and stab traces its actual path through them; a bullet that stops short spares what's beyond it.
 
 | Hit | What happens |
 | --- | --- |
@@ -209,7 +209,11 @@ Everyone - you, enemies, the range civilians and the target dummies - has organs
 | Lungs | Bleeding into the chest, short of breath: slower, shakier, no sprinting. Both lungs: barely breathing |
 | Liver, spleen, kidneys, intestines | Internal bleeding no dressing stops |
 | Femur, tibia, pelvis | Leg won't hold them: down, crawling at best |
+| Knee, ankle (shattered joint) | Leg won't hold them, and the pain never settles (worse than a clean break) |
+| Behind the knee | Popliteal artery: arterial bleed an IFAK can stop |
+| Foot bones | A bad limp and no running, but still walking (both feet: shuffling) |
 | Humerus, forearm bones | The arm hangs useless (aim falls apart; both arms out = can't fight) |
+| Elbow (shattered joint) | The arm is useless, with lasting agony |
 | Skull | Extra protection over the brain |
 
 Bones are ~2.5-3x denser than tissue, so a bullet that crosses one loses more penetration. Head hits that miss the brain and brainstem (jaw, face, neck) no longer kill outright - the bleeding might. Arterial bleeds come only from vessels actually on the wound path (no more dice roll). The HUD lists what you've taken ("Left lung", "Broken right femur", "BLEEDING INSIDE", "Short of breath"), the hit readout and the dummies name the organs hit, and the debug view (hold D-pad down) shows everyone's anatomy x-ray style.

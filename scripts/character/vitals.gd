@@ -64,6 +64,7 @@ func _process(delta: float) -> void:
 			_die("bled out" if damage.cause == "blood loss" else damage.cause)
 			return
 	var base := clampf((maxf(damage.hurt("thorax"), damage.hurt("stomach")) + damage.hurt("head") + maxf(damage.hurt("leg_l"), damage.hurt("leg_r")) + maxf(damage.hurt("arm_l"), damage.hurt("arm_r"))) * 0.5, 0.0, 0.8)
+	base = maxf(base, damage.pain_floor())
 	pain = move_toward(pain, base, delta * 0.12)
 	if using != "":
 		use_left -= delta

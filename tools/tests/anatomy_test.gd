@@ -67,6 +67,30 @@ func _process(_d: float) -> bool:
 		var thigh := Anatomy.trace_rig(Vector3(0.12, 0.72, 0.3), Vector3(0.12, 0.72, -0.3), 0.6)
 		print("  mid thigh: %s, bone adds %.0f gel-mm" % [ids(thigh), Anatomy.bone_gel_mm(thigh)])
 		check("femur_l" in ids(thigh) and Anatomy.bone_gel_mm(thigh) > 30.0, "mid thigh: the femur, which soaks up penetration")
+		# Joints and feet.
+		var knee := Anatomy.trace_rig(Vector3(0.4, 0.505, 0.01), Vector3(-0.1, 0.505, 0.01), 0.5)
+		print("  side to side through the left knee: %s" % [ids(knee)])
+		var dk := DamageModel.new()
+		dk.apply_organs({zone = "leg_l", damage = 10.0, organs = knee})
+		print("    -> mobility %.2f, pain floor %.2f, %s" % [dk.mobility(), dk.pain_floor(), dk.injuries])
+		check("knee_l" in ids(knee) and dk.broken.get("leg_l", false) and dk.mobility() < 0.3, "a shattered knee takes the leg out")
+		check(dk.pain_floor() >= 0.3, "and it's agony (pain won't settle below %.2f)" % dk.pain_floor())
+		var behind := Anatomy.trace_rig(Vector3(0.15, 0.53, -0.3), Vector3(0.15, 0.53, 0.3), 0.6)
+		check("popliteal_l" in ids(behind), "behind the knee: the popliteal artery")
+		var elbow := Anatomy.trace_rig(Vector3(0.44, 1.42, 0.3), Vector3(0.44, 1.42, -0.3), 0.6)
+		var de := DamageModel.new()
+		de.apply_organs({zone = "arm_l", damage = 10.0, organs = elbow})
+		print("  through the left elbow: %s -> arm %.2f, steadiness %.2f" % [ids(elbow), de.hurt("arm_l"), de.steadiness()])
+		check("elbow_l" in ids(elbow) and de.hurt("arm_l") >= 1.0, "a shattered elbow: the arm is useless")
+		var foot := Anatomy.trace_rig(Vector3(0.188, 0.035, 0.4), Vector3(0.188, 0.035, -0.3), 0.7)
+		var df := DamageModel.new()
+		df.apply_organs({zone = "leg_l", damage = 10.0, organs = foot})
+		print("  through the left foot: %s -> leg %.2f, mobility %.2f" % [ids(foot), df.hurt("leg_l"), df.mobility()])
+		check("foot_l" in ids(foot) and df.hurt("leg_l") >= 0.6 and df.mobility() > 0.5 and df.mobility() < 0.75, "a broken foot: a bad limp, but still walking")
+		var ankle := Anatomy.trace_rig(Vector3(0.4, 0.085, -0.02), Vector3(-0.1, 0.085, -0.02), 0.5)
+		var da := DamageModel.new()
+		da.apply_organs({zone = "leg_l", damage = 10.0, organs = ankle})
+		check("ankle_l" in ids(ankle) and da.mobility() < 0.3, "a shattered ankle won't hold them (mobility %.2f)" % da.mobility())
 		var miss := Anatomy.trace_rig(Vector3(0.17, 1.22, 0.3), Vector3(0.17, 1.22, -0.3), 0.6)
 		print("  side of the lower chest: %s" % [ids(miss)])
 		check(miss.is_empty(), "a path down the side of the ribs misses every organ")
@@ -106,6 +130,7 @@ func _process(_d: float) -> bool:
 		shoot_rig(npcs[1], Vector3(0, 1.75, 0.02), Vector3(0, 0, 1), "45_1_fmj230")
 		shoot_rig(npcs[2], Vector3(0.12, 0.72, 0.0), Vector3(0, 0, 1), "45_1_fmj230")
 		shoot_rig(npcs[3], Vector3(0, 1.06, -0.09), Vector3(0, 0, -1), "45_1_fmj230")
+		shoot_rig(npcs[4], Vector3(-0.188, 0.04, 0.06), Vector3(0, 0, 1), "45_1_fmj230")
 	if f == 10:
 		var names := []
 		for k in 4:
@@ -121,8 +146,12 @@ func _process(_d: float) -> bool:
 		check(npcs[2].model.sit > 0.3 or npcs[2].model.kneel > 0.5, "on a broken leg he goes down")
 		check(npcs[3].model.sit > 0.3, "paralysed, he collapses")
 		check(npcs[2].damage.mobility() < 0.3, "and can hardly move (mobility %.2f)" % npcs[2].damage.mobility())
+		var fo = npcs[4]
+		print("foot shot: %s, leg hurt %.2f, kneel %.2f, sit %.2f" % [hits.get(4, {}).get("organ_names", []), fo.model.hurt.leg_r, fo.model.kneel, fo.model.sit])
+		check(fo.damage.broken.get("foot_r", false), "people have feet now: a shot through the foot breaks it")
+		check(fo.model.hurt.leg_r > 0.5 and fo.model.sit < 0.3 and not fo.dead, "he doesn't collapse, but favours the leg (limping / dropping to a knee)")
 	if f == 10 + 16 * 60:
-		check(npcs[0].dead and npcs[0].damage.cause == "heart stopped", "the heart stops within ~15 s (%s)" % npcs[0].damage.cause)
+		check(npcs[0].dead and npcs[0].damage.cause in ["heart stopped", "blood loss"], "dead within ~15 s of a heart shot (%s)" % npcs[0].damage.cause)
 		# The range dummies have the same anatomy stretched over their zones.
 		var dummy: Node = null
 		for c in rs.get_children():

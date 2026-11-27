@@ -18,9 +18,12 @@ extends RefCounted
 ##   lung     lungs                    - bleeding into the chest and short of breath
 ##                                       (both lungs: barely breathing)
 ##   organ    liver, spleen, kidneys, gut - internal bleeding that no bandage stops
-##   bone     skull, humerus, forearm, femur, tibia, pelvis, spine body
-##                                     - a broken limb won't work; a bone also takes
-##                                       extra penetration (dense: ~3x gel)
+##   bone     skull, humerus, forearm, femur, tibia, pelvis, foot
+##                                     - a broken limb won't work (a broken foot: a bad
+##                                       limp); a bone also takes extra penetration
+##                                       (dense: ~3x gel)
+##   joint    elbows, knees, ankles   - shattered: the limb won't work and it hurts
+##                                       far more than a clean break
 
 ## id: [name, kind, zone, centre, radii, extra]
 ## extra: bleed ml/s (vessel/heart/organ/lung), limb (bone/cord), bone gel factor.
@@ -60,6 +63,8 @@ const ORGANS := {
 	"brachial_r": ["right brachial artery", "vessel", "arm_r", Vector3(-0.29, 1.405, 0.012), Vector3(0.12, 0.008, 0.008), {bleed = 20.0}],
 	"forearm_l": ["left forearm bones", "bone", "arm_l", Vector3(0.57, 1.415, 0), Vector3(0.12, 0.012, 0.022), {limb = "arm_l", gel = 3.0}],
 	"forearm_r": ["right forearm bones", "bone", "arm_r", Vector3(-0.57, 1.415, 0), Vector3(0.12, 0.012, 0.022), {limb = "arm_r", gel = 3.0}],
+	"elbow_l": ["left elbow", "joint", "arm_l", Vector3(0.44, 1.42, -0.005), Vector3(0.028, 0.026, 0.026), {limb = "arm_l", gel = 2.8}],
+	"elbow_r": ["right elbow", "joint", "arm_r", Vector3(-0.44, 1.42, -0.005), Vector3(0.028, 0.026, 0.026), {limb = "arm_r", gel = 2.8}],
 	# --- legs
 	"femur_l": ["left femur", "bone", "leg_l", Vector3(0.12, 0.72, 0.0), Vector3(0.016, 0.21, 0.016), {limb = "leg_l", gel = 3.0}],
 	"femur_r": ["right femur", "bone", "leg_r", Vector3(-0.12, 0.72, 0.0), Vector3(0.016, 0.21, 0.016), {limb = "leg_r", gel = 3.0}],
@@ -67,6 +72,14 @@ const ORGANS := {
 	"femoral_r": ["right femoral artery", "vessel", "leg_r", Vector3(-0.10, 0.80, 0.03), Vector3(0.01, 0.12, 0.01), {bleed = 40.0}],
 	"tibia_l": ["left tibia", "bone", "leg_l", Vector3(0.165, 0.29, 0.015), Vector3(0.015, 0.2, 0.018), {limb = "leg_l", gel = 3.0}],
 	"tibia_r": ["right tibia", "bone", "leg_r", Vector3(-0.165, 0.29, 0.015), Vector3(0.015, 0.2, 0.018), {limb = "leg_r", gel = 3.0}],
+	"knee_l": ["left knee", "joint", "leg_l", Vector3(0.15, 0.505, 0.01), Vector3(0.045, 0.035, 0.042), {limb = "leg_l", gel = 2.8}],
+	"knee_r": ["right knee", "joint", "leg_r", Vector3(-0.15, 0.505, 0.01), Vector3(0.045, 0.035, 0.042), {limb = "leg_r", gel = 2.8}],
+	"popliteal_l": ["left popliteal artery", "vessel", "leg_l", Vector3(0.15, 0.53, -0.035), Vector3(0.009, 0.06, 0.009), {bleed = 30.0}],
+	"popliteal_r": ["right popliteal artery", "vessel", "leg_r", Vector3(-0.15, 0.53, -0.035), Vector3(0.009, 0.06, 0.009), {bleed = 30.0}],
+	"ankle_l": ["left ankle", "joint", "leg_l", Vector3(0.185, 0.085, -0.02), Vector3(0.03, 0.028, 0.03), {limb = "leg_l", gel = 2.8}],
+	"ankle_r": ["right ankle", "joint", "leg_r", Vector3(-0.185, 0.085, -0.02), Vector3(0.03, 0.028, 0.03), {limb = "leg_r", gel = 2.8}],
+	"foot_l": ["left foot bones", "bone", "leg_l", Vector3(0.188, 0.035, 0.055), Vector3(0.035, 0.025, 0.09), {limb = "foot_l", gel = 2.5}],
+	"foot_r": ["right foot bones", "bone", "leg_r", Vector3(-0.188, 0.035, 0.055), Vector3(0.035, 0.025, 0.09), {limb = "foot_r", gel = 2.5}],
 }
 
 
@@ -101,7 +114,7 @@ static func trace_rig(a: Vector3, b: Vector3, length_m: float) -> Array[Dictiona
 static func bone_gel_mm(hits: Array[Dictionary]) -> float:
 	var mm := 0.0
 	for h in hits:
-		if h.kind == "bone":
+		if h.kind == "bone" or h.kind == "joint":
 			var chord: float = minf(h.chord_mm, 12.0) if h.extra.get("shell", false) else h.chord_mm
 			mm += chord * (float(h.extra.get("gel", 2.5)) - 1.0)
 	return mm
@@ -138,8 +151,8 @@ const ZONE_BOXES := {
 	"stomach": [Vector3(0, 1.035, 0.0), Vector3(0.34, 0.37, 0.22)],
 	"arm_l": [Vector3(0.4325, 1.42, 0.0), Vector3(0.535, 0.10, 0.10)],
 	"arm_r": [Vector3(-0.4325, 1.42, 0.0), Vector3(0.535, 0.10, 0.10)],
-	"leg_l": [Vector3(0.14, 0.5, 0.0), Vector3(0.17, 0.86, 0.17)],
-	"leg_r": [Vector3(-0.14, 0.5, 0.0), Vector3(0.17, 0.86, 0.17)],
+	"leg_l": [Vector3(0.15, 0.465, 0.0), Vector3(0.18, 0.93, 0.17)],
+	"leg_r": [Vector3(-0.15, 0.465, 0.0), Vector3(0.18, 0.93, 0.17)],
 }
 
 
@@ -161,7 +174,8 @@ static func box_to_rig(zone: String, size: Vector3) -> Transform3D:
 # ------------------------------------------------------------------ x-ray (debug view)
 
 const XRAY_COLORS := {cns = Color(1.0, 0.6, 0.8), cord = Color(1.0, 1.0, 0.5), heart = Color(0.9, 0.05, 0.1),
-	vessel = Color(0.95, 0.15, 0.15), lung = Color(1.0, 0.55, 0.6), organ = Color(0.55, 0.25, 0.2), bone = Color(0.95, 0.93, 0.85)}
+	vessel = Color(0.95, 0.15, 0.15), lung = Color(1.0, 0.55, 0.6), organ = Color(0.55, 0.25, 0.2), bone = Color(0.95, 0.93, 0.85),
+	joint = Color(0.6, 0.85, 1.0)}
 
 
 ## Show (or hide) the organs and bones inside these hitboxes, seen through the body.

@@ -39,6 +39,8 @@ const HITBOXES := [
 	["leg_l", "LeftLowerLeg", Vector3(0.165, 0.29, 0.0), Vector3(0.12, 0.42, 0.13), 1.0],
 	["leg_r", "RightUpperLeg", Vector3(-0.12, 0.715, 0.0), Vector3(0.15, 0.43, 0.17), 1.0],
 	["leg_r", "RightLowerLeg", Vector3(-0.165, 0.29, 0.0), Vector3(0.12, 0.42, 0.13), 1.0],
+	["leg_l", "LeftFoot", Vector3(0.187, 0.04, 0.05), Vector3(0.10, 0.08, 0.26), 1.0],
+	["leg_r", "RightFoot", Vector3(-0.187, 0.04, 0.05), Vector3(0.10, 0.08, 0.26), 1.0],
 ]
 const LOOT := [  # id, weight
 	["cash", 25], ["painkillers", 15], ["water", 10], ["beans", 10], ["ifak", 5], ["docs", 3],
@@ -213,6 +215,7 @@ func _act_wounded(delta: float) -> void:
 	h.torso = move_toward(h.torso, maxf(damage.hurt("thorax"), damage.hurt("stomach")), delta * 2.0)
 	var shock := damage.shock()
 	var base := clampf((h.torso + h.head + maxf(h.leg_l, h.leg_r) + maxf(h.arm_l, h.arm_r)) * 0.5, 0.0, 0.8)
+	base = maxf(base, damage.pain_floor())
 	pain = move_toward(pain, base, delta * 0.15)
 	model.pain = pain
 	model.shock = move_toward(model.shock, shock, delta * 0.5)
