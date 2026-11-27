@@ -189,3 +189,17 @@ pull = lowpass(noise(0.14), 2500) * env(int(SR * 0.14), 0.01, 0.05) * 0.7
 home = mix(burst(0.06, 450, 0.0002, 0.014) * 1.5, ring(720, 0.18, 0.04, 0.9), ring(2000, 0.1, 0.02, 0.4))
 save("charge.wav", pad(np.concatenate([pull, np.zeros(int(SR * 0.12)), home]), 0.45), 0.8)
 save("selector.wav", pad(mix(burst(0.015, 2500, 0.0001, 0.003), ring(3800, 0.05, 0.008, 0.5)), 0.08), 0.55)
+
+# --- Window glass: the pane letting go (a sharp crack, then a cascade of
+#     high bright pieces), and a single shard landing (short tinkle).
+crash = mix(burst(0.25, 2500, 0.0002, 0.03) * 1.6, lowpass(noise(0.2), 900) * env(int(SR * 0.2), 0.0005, 0.02) * 0.8)
+cascade = np.zeros(int(SR * 1.4))
+for _ in range(38):
+    at = int(SR * min(1.25, abs(rng.normal(0.18, 0.28))))
+    f = rng.uniform(3200, 7800)
+    piece = mix(burst(0.04, 3500, 0.0001, 0.006) * rng.uniform(0.2, 0.7), ring(f, 0.2, rng.uniform(0.02, 0.06), rng.uniform(0.1, 0.35)))
+    end = min(len(cascade), at + len(piece))
+    cascade[at:end] += piece[:end - at]
+save("glass_shatter.wav", mix(crash, cascade), 0.85)
+tink = mix(burst(0.03, 4000, 0.0001, 0.004) * 0.6, ring(5600, 0.18, 0.035, 0.5), ring(7900, 0.12, 0.02, 0.25))
+save("glass_tinkle.wav", pad(tink, 0.2), 0.45)

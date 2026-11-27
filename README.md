@@ -182,6 +182,7 @@ godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as item
 godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: barrel velocity, fragmentation, icepick, walls, steel, tracers, auto, selector, sights, reload
 godot --headless --fixed-fps 60 -s tools/tests/anatomy_test.gd    # organs/bones: wound paths, heart, brain, femur, spine, lungs, liver, dummies, x-ray
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
+godot --headless --fixed-fps 60 -s tools/tests/glass_test.gd     # panes: 6-12 pieces, 2-4 holes, breaks, pieces fall, some stay, range panel comes back
 godot --headless --fixed-fps 60 -s tools/tests/house_gen_test.gd  # generated houses: 12 seeds walkable from the street, both plans, same seed = same house, climb the stairs
 ```
 
@@ -267,12 +268,21 @@ Main menu > "Play (random mission)" picks a map type for the level; "Play (subur
   - The stairs are solid treads with an invisible ramp along the nosings, so you and the AI's navmesh both treat them as a slope.
 - **Seeds:** the layout seed is shown on the sign by the sidewalk. Setting `layout_seed` before the level loads rebuilds that exact house (`0` means a new one).
 
+## Glass
+
+Every window, sliding door, shower screen and the range's glass panel is a `GlassPane` (`scripts/ballistics/glass_pane.gd`):
+
+- **Pieces:** each pane is cut into 6-12 pieces (Voronoi cells of well-spread random points). The pieces tile the pane exactly, and each one is its own "glass" collider.
+- **Holes first:** each pane rolls how many hits it takes, 2 to 4. Until then, every bullet that goes through leaves a hole with a spider-web crack on the piece it hit.
+- **Then it breaks:** on the last hit, the pieces nearest that hole (50-85% of them) fall out as loose rigid bodies with a crash, a spray of glitter, and a tinkle when they land. The rest stay in the frame, more often the ones along its edge. Shooting a piece that's left knocks it out.
+- **Cost:** an unbroken pane draws as one mesh. Loose pieces don't block people or bullets, and the oldest are cleared past 72 in the scene. House glass stays broken; the range panel is whole again 5 s later.
+
 ## Shoot house (test level)
 
 Main menu > "Play (1995 shoot house)": the original fixed layout, kept for the tests. It's a 1995 suburban ranch house built in code (`scripts/levels/shoot_house.gd` on `LevelKit`): 64 x 32 ft with an attached two-car garage, a lawn, driveway, street, a fenced back yard and a deck.
 
 - **Rooms:** kitchen, dining nook, foyer, living room, laundry, two bedrooms and an office along the front; a hallway; then the family room (wood paneling, brick fireplace), a bathroom, a kid's room and the master bedroom with its own bathroom. Builder-grade 1995 details: popcorn ceilings, beige and mauve carpet, almond appliances, oak cabinets, a geese wallpaper border, floral sofas and CRT TVs.
-- **Construction is real to bullets:** interior walls are 2x4 and drywall (a .45 goes through), exterior walls are siding, OSB, batts and drywall, interior doors are hollow-core and the front door is solid. Brick, porcelain, appliance steel and the car stop or slow rounds by their material. Windows break and stay broken.
+- **Construction is real to bullets:** interior walls are 2x4 and drywall (a .45 goes through), exterior walls are siding, OSB, batts and drywall, interior doors are hollow-core and the front door is solid. Brick, porcelain, appliance steel and the car stop or slow rounds by their material. Windows take a few holes, then break into pieces (see Glass) and stay broken.
 - **Doors:** A opens a door away from you and closes it.
 - **Performance:** static meshes are merged per material in 5 m cells (`LevelKit.batch_meshes`), about 600 draw calls down to about 200.
 
