@@ -289,6 +289,16 @@ func _build_barriers() -> void:
 		var r: Array = rows[i]
 		var x := -11.0 + i * 2.3
 		for k in int(r[3]):
+			if r[1] == "glass":
+				# Real pane: 2-4 holes, then it breaks into pieces; whole again after 5 s.
+				var pane := GlassPane.new()
+				pane.size = Vector2(1.5, 2.0)
+				pane.thickness = r[2]
+				pane.material = r[5]
+				pane.respawn = 5.0
+				pane.position = Vector3(x, 1.0, z)
+				add_child(pane)
+				continue
 			_box(Vector3(1.5, 2.0, r[2]), Vector3(x, 1.0, z - k * (r[4] + r[2])), r[5], Vector3.ZERO, r[1])
 		# Steel frame posts so the panel reads as mounted.
 		_box(Vector3(0.06, 2.1, 0.06), Vector3(x - 0.78, 1.05, z), steel, Vector3.ZERO, "steel")

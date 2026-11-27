@@ -1,6 +1,6 @@
 class_name ImpactFX
 extends Node3D
-## Bullet holes, impact puffs/sparks, impact sounds, breakable glass.
+## Bullet holes, impact puffs/sparks, impact sounds, breakable glass (panes: GlassPane).
 ## Everything is pooled and capped so a long fight stays cheap on the Thor.
 
 const MAX_DECALS := 80
@@ -44,18 +44,22 @@ func spawn(info: Dictionary) -> void:
 	var pos: Vector3 = info.position
 	var result: String = info.result
 	var person := info.collider is Hitbox
-	if result != "disintegrated" and not person:
+	var pane: Object = info.collider.get_meta("glass_pane", null) if is_instance_valid(info.collider) else null
+	if result != "disintegrated" and not person and pane == null:   # glass panes draw their own holes
 		_decal(pos, normal, info.collider, props.fx)
 	if info.exit_pos != null:
 		var dir: Vector3 = (info.exit_pos - pos).normalized()
-		if not person:
+		if not person and pane == null:
 			_decal(info.exit_pos, dir, info.collider, props.fx, 1.3)
 			_puff(info.exit_pos, dir, props, 0.6)
 	if not person:
 		_puff(pos, normal, props, 1.0)
 	_sound("ricochet" if result == "ricochet" else String(props.fx), pos)
 	if props.get("breakable", false) and result != "ricochet":
-		_break(info.collider)
+		if pane != null and is_instance_valid(pane):
+			pane.hit(info.collider, info)     # holes, then it breaks into pieces (GlassPane)
+		else:
+			_break(info.collider)
 
 
 func _decal(pos: Vector3, normal: Vector3, collider: Object, fx: String, scale := 1.0) -> void:
