@@ -18,6 +18,10 @@ var _rng := RandomNumberGenerator.new()
 ## Height of the storey being built: box(), cylinder(), wall() and room() add it to their y, so a second
 ## floor is built with the same calls as the first. Parented boxes are local to their parent and don't.
 var floor_y := 0.0
+## Generated levels: uploaded textures (assets/textures/) mixed into the materials they pick.
+var textures: TexturePool
+## Ceiling finish for room(); null = popcorn.
+var ceiling_material: Material
 
 
 static func ft(v: float) -> float:
@@ -300,7 +304,7 @@ func room(x0: float, z0: float, x1: float, z1: float, floor_m: Material, ceiling
 	if floor_m != null:
 		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, 0.01, (z0 + z1) / 2.0), floor_m, "concrete", 0.0, false)
 	if ceiling:
-		var popcorn := textured("popcorn", img_noise(Color(0.9, 0.89, 0.86), 0.05, 32, 4), 0.5, 1.0)
+		var popcorn: Material = ceiling_material if ceiling_material else textured("popcorn", img_noise(Color(0.9, 0.89, 0.86), 0.05, 32, 4), 0.5, 1.0)
 		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, CEILING + 0.01, (z0 + z1) / 2.0), popcorn, "drywall", 0.0, false)
 	if light > 0.0:
 		var l := OmniLight3D.new()

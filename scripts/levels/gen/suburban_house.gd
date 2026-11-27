@@ -53,6 +53,7 @@ var _conns: Array = []
 var _ext_open: Array = []                ## Exterior openings: {room, side, c, w, kind, ...}
 var _f: Furniture
 var _paint: Array = []
+var _plain_paint: Material
 var _siding: StandardMaterial3D
 var _trim_col := Color.WHITE
 var _counts := {}
@@ -61,6 +62,8 @@ var _counts := {}
 func build() -> void:
 	_rng.seed = layout_seed
 	clear_text = "HOUSE CLEAR"
+	if textures == null:
+		textures = TexturePool.new(MAP_ID)
 	_f = Furniture.new(self, _rng)
 	_materials()
 	_environment()
@@ -650,15 +653,24 @@ func _windows() -> void:
 # ================================================================== structure
 
 func _materials() -> void:
+	# Built-in procedural finishes, plus any uploaded textures (TexturePool) in the same pools.
 	var paints := [Color(0.88, 0.85, 0.78), Color(0.9, 0.88, 0.84), Color(0.85, 0.82, 0.72), Color(0.82, 0.86, 0.84), Color(0.9, 0.84, 0.8), Color(0.83, 0.84, 0.9)]
+	var builtin_paint: Array = []
 	for i in paints.size():
-		_paint.append(textured("paint_%d" % i, img_noise(paints[i], 0.015, 16, 2 + i), 1.0, 0.9))
+		builtin_paint.append(textured("paint_%d" % i, img_noise(paints[i], 0.015, 16, 2 + i), 1.0, 0.9))
+	_paint = textures.pool("walls", builtin_paint)
+	_plain_paint = builtin_paint[0]
 	var sidings := [Color(0.84, 0.82, 0.72), Color(0.92, 0.92, 0.9), Color(0.62, 0.68, 0.74), Color(0.85, 0.8, 0.55), Color(0.62, 0.68, 0.56), Color(0.75, 0.7, 0.62)]
-	var sc: Color = sidings[_rng.randi() % sidings.size()]
-	_siding = textured("siding_%s" % sc.to_html(), img_boards(sc, sc.darkened(0.25), 8), 0.8, 0.7)
+	var builtin_siding: Array = []
+	for sc: Color in sidings:
+		builtin_siding.append(textured("siding_%s" % sc.to_html(), img_boards(sc, sc.darkened(0.25), 8), 0.8, 0.7))
+	_siding = textures.pick("exterior/siding", builtin_siding, _rng)
 	_mats["siding"] = _siding
-	var shingle: Color = [Color(0.3, 0.28, 0.27), Color(0.25, 0.22, 0.2), Color(0.35, 0.32, 0.28), Color(0.2, 0.22, 0.25)][_rng.randi() % 4]
-	_mats["shingles"] = textured("shingles_%s" % shingle.to_html(), img_boards(shingle, shingle.darkened(0.4), 10, false, 64, 0.06), 1.0, 1.0)
+	var builtin_roof: Array = []
+	for shingle: Color in [Color(0.3, 0.28, 0.27), Color(0.25, 0.22, 0.2), Color(0.35, 0.32, 0.28), Color(0.2, 0.22, 0.25)]:
+		builtin_roof.append(textured("shingles_%s" % shingle.to_html(), img_boards(shingle, shingle.darkened(0.4), 10, false, 64, 0.06), 1.0, 1.0))
+	_mats["shingles"] = textures.pick("roofs", builtin_roof, _rng)
+	ceiling_material = textures.pick("ceilings", [textured("popcorn", img_noise(Color(0.9, 0.89, 0.86), 0.05, 32, 4), 0.5, 1.0)], _rng)
 
 
 func _room_paint(r: Dictionary) -> Material:
@@ -690,10 +702,11 @@ func _build_structure() -> void:
 	var carpets: Array = []
 	for c: Color in carpet_cols:
 		carpets.append(textured("carpet_%s" % c.to_html(), img_noise(c, 0.04, 32, 11), 0.4, 1.0))
-	var vinyl := textured("vinyl", img_checker(Color(0.86, 0.82, 0.7), Color(0.75, 0.68, 0.55)), 0.6, 0.5)
-	var tile := textured("tile", img_checker(Color(0.93, 0.93, 0.9), Color(0.88, 0.88, 0.86), 32, 4), 0.6, 0.3)
-	var oak := textured("oak_floor", img_boards(Color(0.62, 0.45, 0.26), Color(0.45, 0.3, 0.17), 8, true), 0.9, 0.5)
-	var concrete := textured("concrete", img_noise(Color(0.68, 0.67, 0.64), 0.04, 32, 8), 1.2, 0.95)
+	carpets = textures.pool("floors/carpet", carpets)
+	var vinyl: Material = textures.pick("floors/vinyl", [textured("vinyl", img_checker(Color(0.86, 0.82, 0.7), Color(0.75, 0.68, 0.55)), 0.6, 0.5)], _rng)
+	var tile: Material = textures.pick("floors/tile", [textured("tile", img_checker(Color(0.93, 0.93, 0.9), Color(0.88, 0.88, 0.86), 32, 4), 0.6, 0.3)], _rng)
+	var oak: Material = textures.pick("floors/wood", [textured("oak_floor", img_boards(Color(0.62, 0.45, 0.26), Color(0.45, 0.3, 0.17), 8, true), 0.9, 0.5)], _rng)
+	var concrete: Material = textures.pick("ground/concrete", [textured("concrete", img_noise(Color(0.68, 0.67, 0.64), 0.04, 32, 8), 1.2, 0.95)], _rng)
 	var subfloor := flat("floor_band", Color(0.8, 0.78, 0.72), 0.9)
 	var house_carpet: Material = carpets[_rng.randi() % carpets.size()]
 	# Slab under everything (the lawn underneath is what you stand on at ground level).
@@ -763,7 +776,7 @@ func _build_structure() -> void:
 	floor_y = 0.0
 	# Ceiling slab and roof over the top storey.
 	var top := (stories - 1) * FH + CEILING
-	box(Vector3(fx1 - fx0, 0.05, fz1 - fz0), Vector3((fx0 + fx1) / 2.0, top + 0.045, (fz0 + fz1) / 2.0), _paint[0], "drywall")
+	box(Vector3(fx1 - fx0, 0.05, fz1 - fz0), Vector3((fx0 + fx1) / 2.0, top + 0.045, (fz0 + fz1) / 2.0), _plain_paint, "drywall")
 	gable_roof(fx0, fz0, fx1, fz1, top + 0.07, _rng.randf_range(22.0, 32.0), _mats["shingles"])
 	_shutters()
 	if not garage.is_empty():
@@ -833,7 +846,7 @@ func _shutters() -> void:
 func _build_garage() -> void:
 	floor_y = 0.0
 	var g := garage
-	var paint: Material = _paint[0]
+	var paint: Material = _plain_paint
 	var ext := [[0.016, "drywall", paint], [EXT_WALL - 0.016, "exterior_sheathing", _siding]]
 	var t := EXT_WALL / 2.0
 	var outer_x: float = g.x0 if not _mirror else g.x1
@@ -1564,9 +1577,9 @@ func _environment() -> void:
 
 func _lot() -> void:
 	floor_y = 0.0
-	var lawn := textured("lawn", img_noise(Color(0.3, 0.45, 0.2), 0.06, 32, 7), 1.5, 1.0)
-	var concrete := textured("concrete", img_noise(Color(0.68, 0.67, 0.64), 0.04, 32, 8), 1.2, 0.95)
-	var asphalt := textured("asphalt", img_noise(Color(0.22, 0.22, 0.23), 0.05, 32, 9), 1.0, 0.95)
+	var lawn: Material = textures.pick("ground/lawn", [textured("lawn", img_noise(Color(0.3, 0.45, 0.2), 0.06, 32, 7), 1.5, 1.0)], _rng)
+	var concrete: Material = textures.pick("ground/concrete", [textured("concrete", img_noise(Color(0.68, 0.67, 0.64), 0.04, 32, 8), 1.2, 0.95)], _rng)
+	var asphalt: Material = textures.pick("ground/asphalt", [textured("asphalt", img_noise(Color(0.22, 0.22, 0.23), 0.05, 32, 9), 1.0, 0.95)], _rng)
 	box(Vector3(120, 1, 80), Vector3(0, -0.5, -8), lawn, "concrete")
 	if not garage.is_empty():
 		var gw: float = garage.x1 - garage.x0
@@ -1583,7 +1596,7 @@ func _lot() -> void:
 	# Back yard: privacy fence, deck off the slider.
 	var lx0 := minf(fx0, garage.get("x0", fx0)) - 2.0
 	var lx1 := maxf(fx1, garage.get("x1", fx1)) + 2.0
-	var fence := textured("fence", img_boards(Color(0.6, 0.48, 0.32), Color(0.4, 0.3, 0.2), 8, true), 1.2)
+	var fence: Material = textures.pick("fences", [textured("fence", img_boards(Color(0.6, 0.48, 0.32), Color(0.4, 0.3, 0.2), 8, true), 1.2)], _rng)
 	var fy := 6.0 * FT
 	var back := fz0 - _rng.randf_range(7.0, 10.0)
 	box(Vector3(lx1 - lx0, fy, 0.05), Vector3((lx0 + lx1) / 2.0, fy / 2.0, back), fence, "wood")

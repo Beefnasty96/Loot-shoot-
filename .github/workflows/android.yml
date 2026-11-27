@@ -131,6 +131,9 @@ jobs:
           git push
           echo "Signing key saved permanently."
 
+      - name: Import settings for uploaded textures
+        run: python3 tools/textures/import_presets.py assets/textures
+
       - name: Import project
         run: ~/godot/godot --headless --import
 
