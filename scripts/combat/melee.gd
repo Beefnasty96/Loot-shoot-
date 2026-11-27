@@ -84,6 +84,10 @@ static func strike(hit: Dictionary, kind: String, blade: BladeDef, strength: flo
 			info.depth_mm = clampf(blade.slash_depth_mm * strength * rng.randf_range(0.8, 1.15) - cloth * 2.5, 1.5, 30.0)
 			info.length_mm = rng.randf_range(90.0, 190.0) * clampf(strength, 0.6, 1.3)
 			info.momentum = 5.0 * strength
+		# Organs and bones the blade reaches: straight in for a stab, just under the skin for a slash.
+		var into: Vector3 = dir if kind == "stab" else -(hit.normal as Vector3)
+		info.organs = Anatomy.trace(hb, hit.position, into.normalized(), info.depth_mm / 1000.0).filter(
+			func(h): return h.kind != "bone")   # a blade nicks bone, it doesn't break it
 		var wound := DamageModel.make_blade_wound(info, rng)   # also sets info.damage
 		info.wound = wound
 		info.bleed = ("ARTERIAL BLEED " if wound.heavy else "bleed ") + "%.1f ml/s" % wound.rate

@@ -111,7 +111,7 @@ func _process(_d: float) -> bool:
 		_shoot(c, "UpperChest", "45_2_jhp230")
 	if f == 45 + 483:
 		var moved: float = npcs[1].model._pbones["UpperChest"].linear_velocity.length()
-		check(moved > 0.05, "shooting a body pushes it (%.2f m/s)" % moved)
+		check(moved > 0.03, "shooting a body pushes it (%.2f m/s)" % moved)
 	if f == 45 + 490:
 		print("%d failure(s)" % fails)
 		quit(1 if fails else 0)

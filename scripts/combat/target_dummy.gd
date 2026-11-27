@@ -9,10 +9,11 @@ const ZONES := [
 	["head", Vector3(0.2, 0.24, 0.22), Vector3(0, 1.66, 0), 1.3],
 	["thorax", Vector3(0.4, 0.34, 0.25), Vector3(0, 1.36, 0), 1.1],
 	["stomach", Vector3(0.34, 0.26, 0.22), Vector3(0, 1.06, 0), 1.0],
-	["arm_l", Vector3(0.1, 0.62, 0.12), Vector3(-0.27, 1.22, 0), 1.0],
-	["arm_r", Vector3(0.1, 0.62, 0.12), Vector3(0.27, 1.22, 0), 1.0],
-	["leg_l", Vector3(0.15, 0.92, 0.17), Vector3(-0.1, 0.46, 0), 1.0],
-	["leg_r", Vector3(0.15, 0.92, 0.17), Vector3(0.1, 0.46, 0), 1.0],
+	# It faces +Z (the firing line), so its left is +X.
+	["arm_l", Vector3(0.1, 0.62, 0.12), Vector3(0.27, 1.22, 0), 1.0],
+	["arm_r", Vector3(0.1, 0.62, 0.12), Vector3(-0.27, 1.22, 0), 1.0],
+	["leg_l", Vector3(0.15, 0.92, 0.17), Vector3(0.1, 0.46, 0), 1.0],
+	["leg_r", Vector3(0.15, 0.92, 0.17), Vector3(-0.1, 0.46, 0), 1.0],
 ]
 const ZONE_NAMES := {head = "HEAD", thorax = "THORAX", stomach = "STOMACH", arm_l = "L ARM", arm_r = "R ARM", leg_l = "L LEG", leg_r = "R LEG"}
 
@@ -37,6 +38,8 @@ func _ready() -> void:
 		hb.receiver = self
 		hb.set_meta("material", "dummy")
 		hb.position = z[2]
+		hb.to_rig = Anatomy.box_to_rig(z[0], z[1])   # a person's organs and bones, stretched to fit
+		hb.has_anatomy = true
 		var cs := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
 		shape.size = z[1]
@@ -71,6 +74,7 @@ func take_hit(info: Dictionary) -> void:
 	if model.dead:
 		return
 	var zone: String = info.zone
+	model.apply_organs(info)
 	var dmg: float = info.damage
 	model.apply(zone, dmg)
 	_idle = 0.0
@@ -80,7 +84,8 @@ func take_hit(info: Dictionary) -> void:
 	else:
 		var ftlb := AmmoType.j_to_ftlb(info.deposited)
 		var outcome := "through" if info.result == "penetrated" else "stopped"
-		_float_text("-%d %s\n%d ft-lb, %s" % [roundi(dmg), ZONE_NAMES.get(zone, zone), roundi(ftlb), outcome], info.position)
+		var organs := ", ".join(info.get("organ_names", []))
+		_float_text("-%d %s\n%d ft-lb, %s%s" % [roundi(dmg), ZONE_NAMES.get(zone, zone), roundi(ftlb), outcome, ("\n" + organs) if organs != "" else ""], info.position)
 	if model.dead:
 		_reset_timer = 3.0
 		_body.rotation_degrees.x = -80.0  # topple backwards
@@ -88,7 +93,17 @@ func take_hit(info: Dictionary) -> void:
 	_update_status()
 
 
+var _xray := false
+
+
 func _process(delta: float) -> void:
+	if Ballistics.debug_enabled != _xray:   # debug view: see the organs and bones inside
+		_xray = Ballistics.debug_enabled
+		var hbs := []
+		for c in _body.get_children():
+			if c is Hitbox:
+				hbs.append(c)
+		Anatomy.set_xray(hbs, _xray)
 	if _reset_timer > 0.0:
 		_reset_timer -= delta
 		if _reset_timer <= 0.0:

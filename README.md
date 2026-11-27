@@ -180,6 +180,7 @@ godot --headless --fixed-fps 60 -s tools/tests/shoot_house_test.gd # house: room
 godot --headless --fixed-fps 60 -s tools/tests/enemy_ai_test.gd   # navmesh, sight, hearing, doors, shooting, knife, cover, meds, death
 godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as items, attachment tree, stats, models, light, suppressor + hearing, drops
 godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: barrel velocity, fragmentation, icepick, walls, steel, tracers, auto, selector, sights, reload
+godot --headless --fixed-fps 60 -s tools/tests/anatomy_test.gd    # organs/bones: wound paths, heart, brain, femur, spine, lungs, liver, dummies, x-ray
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
 godot --headless --fixed-fps 60 -s tools/tests/house_gen_test.gd  # generated houses: 12 seeds walkable from the street, both plans, same seed = same house, climb the stairs
 ```
@@ -195,6 +196,29 @@ A hit pushes with the momentum the bullet lost plus 0.02 kg·m/s per joule it le
 Every bullet that hits a person opens a wound with a bleed rate in ml/s. The rate depends on the wound channel (an expanded hollow point bleeds about 2x ball), how long the channel is, the area hit (chest and belly bleed most) and whether it went through (two holes). Some hits open a major vessel, more often with bigger wound channels: an arterial bleed of 10–35 ml/s that doesn't clot. Light bleeds clot over a few minutes. People carry 70 ml of blood per kg; at 20% lost they start to sag, and at 40% lost they collapse and die.
 
 What you see: entry and exit holes and a stain that spreads on clothes as the wound bleeds (both follow the body and the ragdoll), mist at the entry, spray and a splatter on the wall behind exit wounds, drips that pool where someone stands or lies (sized by volume, about 2 mm deep), and puddles that darken as they dry. The debug hit list (D-pad down) shows each wound's bleed rate. `DamageModel.treat()` is ready for bandages, tourniquets and IFAKs once enemies can shoot back.
+
+## Organs and bones
+
+Everyone - you, enemies, the range civilians and the target dummies - has organs, major vessels, bones and joints inside (people have feet now too: a hitbox on each foot) (`scripts/combat/anatomy.gd`), laid out in the rig's rest pose and carried by the hitboxes. Every bullet and stab traces its actual path through them; a bullet that stops short spares what's beyond it.
+
+| Hit | What happens |
+| --- | --- |
+| Brain, brainstem | Dead on the spot |
+| Spinal cord | Neck: everything paralysed and breathing stops (~20 s). Chest or lower back: legs paralysed, they collapse |
+| Heart | Torrential bleeding; the heart stops in 8-14 s (they can keep shooting until then) |
+| Aorta, vena cava, subclavian, iliac | Arterial bleed inside the chest/belly - no tourniquet or packing reaches it |
+| Carotids, brachial, femoral | Arterial bleed an IFAK can stop |
+| Lungs | Bleeding into the chest, short of breath: slower, shakier, no sprinting. Both lungs: barely breathing |
+| Liver, spleen, kidneys, intestines | Internal bleeding no dressing stops |
+| Femur, tibia, pelvis | Leg won't hold them: down, crawling at best |
+| Knee, ankle (shattered joint) | Leg won't hold them, and the pain never settles (worse than a clean break) |
+| Behind the knee | Popliteal artery: arterial bleed an IFAK can stop |
+| Foot bones | A bad limp and no running, but still walking (both feet: shuffling) |
+| Humerus, forearm bones | The arm hangs useless (aim falls apart; both arms out = can't fight) |
+| Elbow (shattered joint) | The arm is useless, with lasting agony |
+| Skull | Extra protection over the brain |
+
+Bones are ~2.5-3x denser than tissue, so a bullet that crosses one loses more penetration. Head hits that miss the brain and brainstem (jaw, face, neck) no longer kill outright - the bleeding might. Arterial bleeds come only from vessels actually on the wound path (no more dice roll). The HUD lists what you've taken ("Left lung", "Broken right femur", "BLEEDING INSIDE", "Short of breath"), the hit readout and the dummies name the organs hit, and the debug view (hold D-pad down) shows everyone's anatomy x-ray style.
 
 ## Acting wounded
 
