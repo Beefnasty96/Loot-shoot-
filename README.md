@@ -182,6 +182,7 @@ godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as item
 godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: barrel velocity, fragmentation, icepick, walls, steel, tracers, auto, selector, sights, reload
 godot --headless --fixed-fps 60 -s tools/tests/anatomy_test.gd    # organs/bones: wound paths, heart, brain, femur, spine, lungs, liver, dummies, x-ray
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
+godot --headless --fixed-fps 60 -s tools/tests/texture_pool_test.gd # uploaded textures: folders, size tags, normal maps, per-map pools, used in a house
 godot --headless --fixed-fps 60 -s tools/tests/house_gen_test.gd  # generated houses: 12 seeds walkable from the street, both plans, same seed = same house, climb the stairs
 ```
 
@@ -265,6 +266,7 @@ Main menu > "Play (random mission)" picks a map type for the level; "Play (subur
   - The plan is a set of rectangles that tile the footprint. Walls go wherever two rooms meet, with the doors or openings the plan asks for, so every room can be reached from the front door.
   - Furniture stands against walls or in the middle of a room. It stays clear of door swings and windows (tall pieces don't block windows), and a piece is left out if it would cut a room off from one of its doors. This is checked on a 6 in walkability grid.
   - The stairs are solid treads with an invisible ramp along the nosings, so you and the AI's navmesh both treat them as a slope.
+- **Your own textures:** image files dropped into `assets/textures/` join the pools the generator picks walls, floors, ceilings, siding, roofs, ground, fences, furniture wood/fabric and countertops from. `common/` is used by every map type and `<map type>/` by just that one. The folder list and naming rules (`@4ft` size tags, `_normal` maps) are in `assets/textures/README.md`; the code is `scripts/levels/texture_pool.gd`.
 - **Seeds:** the layout seed is shown on the sign by the sidewalk. Setting `layout_seed` before the level loads rebuilds that exact house (`0` means a new one).
 
 ## Shoot house (test level)

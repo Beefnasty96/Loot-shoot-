@@ -27,6 +27,7 @@ var black: Material
 var metal: Material
 var mirror: Material
 var marble: Material
+var counter_top: Material       ## One countertop for the whole house.
 
 
 func _init(kit: LevelKit, r: RandomNumberGenerator) -> void:
@@ -43,6 +44,10 @@ func _init(kit: LevelKit, r: RandomNumberGenerator) -> void:
 	var b: Array = woods[rng.randi() % woods.size()]
 	wood = k.textured("f_" + a[0], k.img_boards(a[1], a[2], 4, false, 64, 0.06), 0.6, 0.6)
 	wood2 = k.textured("f_" + b[0], k.img_boards(b[1], b[2], 4, false, 64, 0.06), 0.6, 0.6)
+	if k.textures:      # uploaded wood finishes join the pick
+		var woods_up := k.textures.materials("furniture/wood")
+		if not woods_up.is_empty() and rng.randf() < float(woods_up.size()) / (woods_up.size() + woods.size()):
+			wood = woods_up[rng.randi() % woods_up.size()]
 	var cols := [
 		[Color(0.25, 0.32, 0.28), Color(0.72, 0.35, 0.4), Color(0.45, 0.55, 0.35)],    # hunter green floral
 		[Color(0.85, 0.8, 0.68), Color(0.55, 0.3, 0.35), Color(0.4, 0.5, 0.35)],       # cream rose chintz
@@ -56,6 +61,9 @@ func _init(kit: LevelKit, r: RandomNumberGenerator) -> void:
 			fabrics.append(k.textured("fab_%d_%s" % [i, c[0].to_html()], k.img_floral(c[0], c[1], c[2]), 0.5, 0.95))
 		else:
 			fabrics.append(k.textured("plaid_%d_%s" % [i, c[0].to_html()], k.img_checker(c[0], c[2], 32, 6), 0.4, 0.95))
+	if k.textures:      # uploaded upholstery joins the fabrics
+		for m in k.textures.materials("furniture/fabric"):
+			fabrics.append(m)
 	for c in [Color(0.78, 0.7, 0.85), Color(0.35, 0.45, 0.65), Color(0.85, 0.82, 0.75), Color(0.7, 0.3, 0.3), Color(0.45, 0.6, 0.45)]:
 		sheets.append(k.flat("sheets_%s" % c.to_html(), c))
 	var appl := [Color(0.88, 0.84, 0.74), Color(0.94, 0.94, 0.92), Color(0.12, 0.12, 0.12)]   # almond, white, black
@@ -353,7 +361,12 @@ func crib(n: Node3D, w: float, d: float) -> void:
 # ------------------------------------------------------------------ kitchen
 
 func counter(n: Node3D, w: float, d: float, uppers := true, sink := false) -> void:
-	var top := k.flat("laminate_%d" % (rng.randi() % 3), [Color(0.85, 0.8, 0.68), Color(0.9, 0.9, 0.88), Color(0.55, 0.5, 0.45)][rng.randi() % 3], 0.5)
+	if counter_top == null:
+		var tops: Array = []
+		for c: Color in [Color(0.85, 0.8, 0.68), Color(0.9, 0.9, 0.88), Color(0.55, 0.5, 0.45)]:
+			tops.append(k.flat("laminate_%s" % c.to_html(), c, 0.5))
+		counter_top = k.textures.pick("counters", tops, rng) if k.textures else tops[rng.randi() % tops.size()]
+	var top: Material = counter_top
 	_b(n, Vector3(w, 0.86, d - 0.04), Vector3(0, 0.43, -0.02), wood, "cabinet")
 	_b(n, Vector3(w + 0.02, 0.04, d), Vector3(0, 0.88, 0), top, "wood", false)
 	if sink:
