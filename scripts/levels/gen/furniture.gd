@@ -424,8 +424,15 @@ func tub(n: Node3D, w: float, d: float) -> void:
 
 func shower(n: Node3D, w: float, d: float) -> void:
 	_b(n, Vector3(w, 0.1, d), Vector3(0, 0.05, 0), porcelain, "porcelain")
-	_b(n, Vector3(w, 1.9, 0.01), Vector3(0, 1.05, d / 2.0), k.mat("glass", func(): return k.flat("glass_flat", Color(0.7, 0.8, 0.9))), "glass")
-	_b(n, Vector3(0.01, 1.9, d), Vector3(w / 2.0, 1.05, 0), k.mat("glass", func(): return k.flat("glass_flat", Color(0.7, 0.8, 0.9))), "glass")
+	for side in [[Vector2(w, 1.9), Vector3(0, 1.05, d / 2.0), 0.0], [Vector2(d, 1.9), Vector3(w / 2.0, 1.05, 0), PI / 2.0]]:
+		var g := GlassPane.new()
+		g.size = side[0]
+		g.thickness = 0.008
+		g.material = k.mat("glass", func(): return k.flat("glass_flat", Color(0.7, 0.8, 0.9)))
+		g.seed_value = rng.randi() | 1
+		g.position = side[1]
+		g.rotation.y = side[2]
+		n.add_child(g)
 
 
 func vanity(n: Node3D, w: float, d: float) -> void:

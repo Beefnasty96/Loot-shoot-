@@ -271,8 +271,15 @@ func _window(centre: Vector3, w: float, sill: float, head: float, along_x: bool,
 		m.metallic = 0.3
 		return m)
 	var h := head - sill
-	var pane := box(Vector3(w - 0.06, h - 0.06, 0.006) if along_x else Vector3(0.006, h - 0.06, w - 0.06), centre + Vector3(0, sill + h / 2.0, 0), glass, "glass")
-	pane.set_meta("stay_broken", true)
+	# Takes 2-4 holes, then breaks into 6-12 pieces; some stay in the frame (stays broken).
+	var pane := GlassPane.new()
+	pane.size = Vector2(w - 0.06, h - 0.06)
+	pane.thickness = 0.006
+	pane.material = glass
+	pane.seed_value = _rng.randi() | 1
+	pane.position = centre + Vector3(0, floor_y + sill + h / 2.0, 0)
+	pane.rotation.y = 0.0 if along_x else PI / 2.0
+	add_child(pane)
 	var trim := flat("trim", Color(0.95, 0.94, 0.9), 0.5)
 	# Muntin cross (a 1995 builder-grade colonial grid).
 	box(Vector3(w, 0.025, 0.02) if along_x else Vector3(0.02, 0.025, w), centre + Vector3(0, sill + h / 2.0, 0), trim, "wood", 0.0, false)
@@ -389,7 +396,7 @@ func _batchable(mi: MeshInstance3D) -> bool:
 		return false
 	var n: Node = mi.get_parent()
 	while n and n != self:
-		if n is Door or n is AnimatableBody3D or n is RigidBody3D or n.has_meta("stay_broken") or n is CharacterBody3D:
+		if n is Door or n is GlassPane or n is AnimatableBody3D or n is RigidBody3D or n.has_meta("stay_broken") or n is CharacterBody3D:
 			return false
 		n = n.get_parent()
 	return true
