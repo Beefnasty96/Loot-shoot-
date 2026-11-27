@@ -16,7 +16,7 @@ extends Node3D
 ## Local space: X along the width, Y up, Z through the glass.
 
 const DENSITY := 2500.0          ## kg/m3
-const MAX_LOOSE := 72            ## Loose pieces in the whole scene before the oldest are cleared.
+const MAX_LOOSE := 25            ## Loose pieces in the whole scene before the oldest are cleared.
 
 static var _loose: Array[Node] = []
 static var _crack_mat: StandardMaterial3D

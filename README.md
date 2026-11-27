@@ -275,7 +275,7 @@ Every window, sliding door, shower screen and the range's glass panel is a `Glas
 - **Pieces:** each pane is cut into 6-12 pieces (Voronoi cells of well-spread random points). The pieces tile the pane exactly, and each one is its own "glass" collider.
 - **Holes first:** each pane rolls how many hits it takes, 2 to 4. Until then, every bullet that goes through leaves a hole with a spider-web crack on the piece it hit.
 - **Then it breaks:** on the last hit, the pieces nearest that hole (50-85% of them) fall out as loose rigid bodies with a crash, a spray of glitter, and a tinkle when they land. The rest stay in the frame, more often the ones along its edge. Shooting a piece that's left knocks it out.
-- **Cost:** an unbroken pane draws as one mesh. Loose pieces don't block people or bullets, and the oldest are cleared past 72 in the scene. House glass stays broken; the range panel is whole again 5 s later.
+- **Cost:** an unbroken pane draws as one mesh. Loose pieces don't block people or bullets, and the oldest are cleared past 25 in the scene. House glass stays broken; the range panel is whole again 5 s later.
 
 ## Shoot house (test level)
 
