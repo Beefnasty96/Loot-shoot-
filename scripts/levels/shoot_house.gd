@@ -1,4 +1,4 @@
-extends LevelKit
+extends MissionLevel
 ## Test level: a 1995 suburban ranch house to clear, built in code.
 ##
 ## 64 x 32 ft single storey with an attached two-car garage, on a lot with a lawn,
@@ -30,24 +30,14 @@ const Z1 := 4.75
 const GX0 := -14.7
 const GZ0 := -2.0
 
-var player: Player
-var enemies: Array[Enemy] = []
-var spawn_enemies := true        ## Tests turn this off to place their own.
-var _clock := 0.0
-var _cleared := false
-var _hud: Node
-var _nav: NavigationRegion3D
-## Spots for the AI (next step): room centres the enemies can be placed in or patrol between.
-var rooms := {}
-
 var _paint: StandardMaterial3D
 var _siding: StandardMaterial3D
 
 
-func _ready() -> void:
+func build() -> void:
 	_rng.seed = 1995
-	DisplayServer.screen_set_keep_on(true)
-	Ballistics.debug_enabled = false
+	clear_text = "HOUSE CLEAR"
+	player_start = Vector3(-2.55, 0.05, 15.0)    # on the sidewalk, facing the front door
 	_materials()
 	_environment()
 	_lot()
@@ -58,62 +48,9 @@ func _ready() -> void:
 	_garage()
 	_yard()
 	_neighbours()
-	batch_meshes()
-	_bake_navigation()
-
-	player = Player.new()
-	player.name = "Player"
-	player.position = Vector3(-2.55, 0.05, 15.0)    # on the sidewalk, facing the front door
-	add_child(player)
-	var hud: Node = load("res://scripts/hud.gd").new()
-	hud.player = player
-	add_child(hud)
-	_hud = hud
-	if spawn_enemies:
-		_spawn_enemies()
-
-
-func _process(delta: float) -> void:
-	if _hud == null:
-		return
-	if enemies.is_empty():
-		_hud.objective_text = ""
-		return
-	var left := 0
-	for e in enemies:
-		if is_instance_valid(e) and not e.dead and not e.incapacitated():
-			left += 1
-	if not _cleared:
-		_clock += delta
-	if left == 0 and not _cleared:
-		_cleared = true
-	var t := "%d:%02d" % [int(_clock) / 60, int(_clock) % 60]
-	_hud.objective_text = ("HOUSE CLEAR  -  %s" % t) if _cleared else ("Hostiles: %d    %s" % [left, t])
 
 
 # ------------------------------------------------------------------ AI
-
-## Navmesh for the AI, baked from the static level geometry at load (doors are on their own layer).
-func _bake_navigation() -> void:
-	var nm := NavigationMesh.new()
-	nm.agent_radius = 0.15          # with 0.1 m cells, 30 in interior doors stay open (capsules slide past the frames)
-	nm.agent_height = 1.75
-	nm.agent_max_climb = 0.25
-	nm.cell_size = 0.1
-	nm.cell_height = 0.05
-	nm.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
-	nm.geometry_collision_mask = 1
-	nm.filter_baking_aabb = AABB(Vector3(-22, -1, -16), Vector3(42, 5, 32))
-	var map := get_world_3d().navigation_map
-	NavigationServer3D.map_set_cell_size(map, nm.cell_size)
-	NavigationServer3D.map_set_cell_height(map, nm.cell_height)
-	var src := NavigationMeshSourceGeometryData3D.new()
-	NavigationServer3D.parse_source_geometry_data(nm, src, self)
-	NavigationServer3D.bake_from_source_geometry_data(nm, src)
-	_nav = NavigationRegion3D.new()
-	_nav.navigation_mesh = nm
-	add_child(_nav)
-
 
 ## Five occupants: [room, weapon, role, facing toward, patrol rooms].
 func _spawn_enemies() -> void:
@@ -132,24 +69,6 @@ func _spawn_enemies() -> void:
 		for r: String in p[4]:
 			pts.append(rooms[r])
 		add_enemy(at, p[3], p[1], p[2], pts, rng)
-
-
-func add_enemy(at: Vector3, look_at_point: Vector3, weapon: String, role: String, patrol: Array[Vector3] = [], rng: RandomNumberGenerator = null) -> Enemy:
-	if rng == null:
-		rng = RandomNumberGenerator.new()
-		rng.randomize()
-	var e := Enemy.new()
-	e.position = at
-	var d := look_at_point - at
-	e.rotation.y = atan2(-d.x, -d.z)
-	e.patrol = patrol
-	add_child(e)
-	e.post = at
-	e.post_facing = e.rotation.y
-	e._yaw_target = e.rotation.y
-	e.setup(rng, weapon, role)
-	enemies.append(e)
-	return e
 
 
 func _materials() -> void:

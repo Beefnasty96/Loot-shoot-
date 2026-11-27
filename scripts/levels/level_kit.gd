@@ -15,6 +15,9 @@ const DOOR_H := 80.0 * IN           ## 6 ft 8 in.
 
 var _mats := {}
 var _rng := RandomNumberGenerator.new()
+## Height of the storey being built: box(), cylinder(), wall() and room() add it to their y, so a second
+## floor is built with the same calls as the first. Parented boxes are local to their parent and don't.
+var floor_y := 0.0
 
 
 static func ft(v: float) -> float:
@@ -141,6 +144,8 @@ func img_floral(ground: Color, petal: Color, leaf: Color, size := 32) -> Image:
 ## Box with collision and a ballistic material. collide=false -> just the mesh (trim, paint, rugs).
 func box(size: Vector3, pos: Vector3, m: Material, ballistic := "concrete", rot_y_deg := 0.0, collide := true, parent: Node = null) -> Node3D:
 	var host: Node = parent if parent else self
+	if parent == null:
+		pos.y += floor_y
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	var mi := MeshInstance3D.new()
@@ -171,6 +176,7 @@ func cylinder(radius: float, height: float, pos: Vector3, m: Material, ballistic
 	mesh.bottom_radius = radius
 	mesh.height = height
 	mesh.radial_segments = 10
+	pos.y += floor_y
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.material_override = m
@@ -231,7 +237,7 @@ func wall(a: Vector2, b: Vector2, layers: Array, inside := 1.0, openings: Array 
 				d.height = head - 0.01
 				for k in o.get("door", {}):
 					d.set(k, o.door[k])
-				d.position = centre
+				d.position = centre + Vector3(0, floor_y, 0)
 				d.rotation.y = 0.0 if along_x else PI / 2.0
 				add_child(d)
 				_trim_frame(centre, o.w, head, along_x, total_t)
@@ -284,13 +290,14 @@ func _trim_frame(centre: Vector3, w: float, head: float, along_x: bool, wall_t: 
 
 ## Floor finish (no collision; the slab underneath has it) and ceiling for a rectangular room.
 func room(x0: float, z0: float, x1: float, z1: float, floor_m: Material, ceiling := true, light := 1.0) -> void:
-	box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, 0.01, (z0 + z1) / 2.0), floor_m, "concrete", 0.0, false)
+	if floor_m != null:
+		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, 0.01, (z0 + z1) / 2.0), floor_m, "concrete", 0.0, false)
 	if ceiling:
 		var popcorn := textured("popcorn", img_noise(Color(0.9, 0.89, 0.86), 0.05, 32, 4), 0.5, 1.0)
 		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, CEILING + 0.01, (z0 + z1) / 2.0), popcorn, "drywall", 0.0, false)
 	if light > 0.0:
 		var l := OmniLight3D.new()
-		l.position = Vector3((x0 + x1) / 2.0, CEILING - 0.25, (z0 + z1) / 2.0)
+		l.position = Vector3((x0 + x1) / 2.0, floor_y + CEILING - 0.25, (z0 + z1) / 2.0)
 		l.light_color = Color(1.0, 0.9, 0.75)      # incandescent bulbs
 		l.light_energy = light
 		l.omni_range = maxf(x1 - x0, z1 - z0) * 0.9 + 1.5
@@ -309,7 +316,7 @@ func room(x0: float, z0: float, x1: float, z1: float, floor_m: Material, ceiling
 			m.emission = Color(1, 0.92, 0.8)
 			m.emission_energy_multiplier = 0.8
 			return m)
-		dome.position = Vector3(l.position.x, CEILING - 0.03, l.position.z)
+		dome.position = Vector3(l.position.x, floor_y + CEILING - 0.03, l.position.z)
 		add_child(dome)
 
 
@@ -353,7 +360,8 @@ func batch_meshes(cell := 5.0) -> int:
 			continue
 		var m := mi.material_override
 		var p := mi.global_position
-		var key := "%d|%d|%d" % [m.get_instance_id(), floori(p.x / cell), floori(p.z / cell)]
+		# Storeys batch apart, so a chunk is only lit by the lights of its own floor (mobile: 8 per mesh).
+		var key := "%d|%d|%d|%d" % [m.get_instance_id(), floori(p.x / cell), floori(p.z / cell), floori((p.y + 0.2) / 2.7)]
 		if not groups.has(key):
 			var st := SurfaceTool.new()
 			st.begin(Mesh.PRIMITIVE_TRIANGLES)

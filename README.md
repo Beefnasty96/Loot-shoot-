@@ -150,6 +150,7 @@ The `.blend` file is also committed if you want to open it in Blender.
 ## Layout
 
 - `scenes/shooting_range.tscn` – shooting range (built in `scripts/shooting_range.gd`)
+- `scripts/levels/` – `LevelKit` (walls, rooms, roofs), `MissionLevel` (player, HUD, navmesh, occupants), `MapTypes`, the fixed shoot house and the generators in `gen/`
 - `scripts/player.gd` – movement, camera rig, first/third person
 - `scripts/viewmodel.gd` – first-person arms + gun: hip/aim/sprint poses, sway, bob, wall pull-back
 - `scripts/weapons/firearm.gd` – one per gun slot (holster, primary): chamber/magazine, ammo selection, semi/auto, selector, reload, aim/zero, spread, recoil, slide or bolt animation, flash, brass; builds its own viewmodel and third-person gun
@@ -180,6 +181,7 @@ godot --headless --fixed-fps 60 -s tools/tests/enemy_ai_test.gd   # navmesh, sig
 godot --headless --fixed-fps 60 -s tools/tests/weapon_mod_test.gd # guns as items, attachment tree, stats, models, light, suppressor + hearing, drops
 godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: barrel velocity, fragmentation, icepick, walls, steel, tracers, auto, selector, sights, reload
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
+godot --headless --fixed-fps 60 -s tools/tests/house_gen_test.gd  # generated houses: 12 seeds walkable from the street, both plans, same seed = same house, climb the stairs
 ```
 
 ## Bodies and hit reactions
@@ -212,9 +214,38 @@ Y swaps between the 1911 and a USMC Ka-Bar (tools/blender/kabar_build.py: 7 in c
 - **Slash:** about 3/4 in deep in bare skin along a 3½–7½ in cut, but only a scratch through a jacket. It does little damage (10–14 HP) but bleeds freely and is slow to clot. It's worst across the throat, forearms and wrists.
 - **Blood:** a stab leaves a slit and gushes as the blade comes out. A slash leaves a long cut and throws blood off along the swing onto walls and the floor. Arterial bleeds (gunshot or blade) spurt with the heartbeat. The blade gets bloodier with each hit.
 
+## Generated levels (map types)
+
+Main menu > "Play (random mission)" picks a map type for the level; "Play (suburban house)" goes straight to that one. Each map type is a `MissionLevel` scene that builds a fresh layout every time it loads. Restarting from the pause menu builds a new one too. The registry is `scripts/levels/map_types.gd`. Suburban house is the first type. Bank, school, Capitol building, car shop, mall, museum and airplane are listed as coming soon.
+
+### Suburban house (`scripts/levels/gen/suburban_house.gd`)
+
+- **Two kinds of plan:**
+  - **Ranch:** one storey, 54-70 ft wide. A public wing (foyer, living, kitchen, dining, family) and a hallway to the private wing (2-3 bedrooms, hall bath, sometimes laundry or an office, and a master suite with its own bath and walk-in closet).
+  - **Colonial:** two storeys, 35-44 ft wide. A two-storey foyer with a straight 14-step stair (7.7 in rise, 10 in tread) and a railing round the open landing. Downstairs: living room, dining room or office, kitchen, family room, powder room and maybe a laundry. Upstairs: bedrooms, hall bath and the master suite.
+  - Either plan can have an attached two-car garage with a door into the house, and either can be mirrored.
+- **What changes every time:** the plan, room sizes, which rooms there are, where every door and window goes, which doors are open, paint, carpet and siding colours, shutters, the front door colour, roof pitch, yard, trees, neighbours and every piece of furniture. The occupants change too: 4-6 in a ranch and 5-7 in a colonial. One always covers the front door, and a colonial always has at least two upstairs.
+- **Furniture (`scripts/levels/gen/furniture.gd`):**
+  - Living and family rooms: sofas and loveseats, recliners, a coffee table and rug, end tables, a TV stand or entertainment centre, a brick fireplace, an upright piano, bookshelves, plants, floor lamps and ceiling fans.
+  - Kitchen: counters with uppers and a sink under the window, fridge, stove, an island or a table.
+  - Dining room: table and chairs, hutch, sideboard.
+  - Bedrooms: twin, full, queen or king beds, a crib, nightstands, dressers (mirror or TV on top), built-in closets, desks with beige PCs, toy chests, beanbags and posters.
+  - Master suite: armoire and gun safe.
+  - Baths: tub or shower, toilet, vanity.
+  - Laundry: washer and dryer, utility sink, water heater, shelving.
+  - Office: desk, filing cabinet, bookshelves, safe.
+  - Foyer: coat rack and bench.
+  - Garage: 0-2 cars, workbench, tool chest, shelving, mower, freezer and boxes.
+  - Every piece has a real size and the right ballistic material.
+- **How it fits together:**
+  - The plan is a set of rectangles that tile the footprint. Walls go wherever two rooms meet, with the doors or openings the plan asks for, so every room can be reached from the front door.
+  - Furniture stands against walls or in the middle of a room. It stays clear of door swings and windows (tall pieces don't block windows), and a piece is left out if it would cut a room off from one of its doors. This is checked on a 6 in walkability grid.
+  - The stairs are solid treads with an invisible ramp along the nosings, so you and the AI's navmesh both treat them as a slope.
+- **Seeds:** the layout seed is shown on the sign by the sidewalk. Setting `layout_seed` before the level loads rebuilds that exact house (`0` means a new one).
+
 ## Shoot house (test level)
 
-Main menu > "Play (shoot house)". It's a 1995 suburban ranch house built in code (`scripts/levels/shoot_house.gd` on `LevelKit`): 64 x 32 ft with an attached two-car garage, a lawn, driveway, street, a fenced back yard and a deck.
+Main menu > "Play (1995 shoot house)": the original fixed layout, kept for the tests. It's a 1995 suburban ranch house built in code (`scripts/levels/shoot_house.gd` on `LevelKit`): 64 x 32 ft with an attached two-car garage, a lawn, driveway, street, a fenced back yard and a deck.
 
 - **Rooms:** kitchen, dining nook, foyer, living room, laundry, two bedrooms and an office along the front; a hallway; then the family room (wood paneling, brick fireplace), a bathroom, a kid's room and the master bedroom with its own bathroom. Builder-grade 1995 details: popcorn ceilings, beige and mauve carpet, almond appliances, oak cabinets, a geese wallpaper border, floral sofas and CRT TVs.
 - **Construction is real to bullets:** interior walls are 2x4 and drywall (a .45 goes through), exterior walls are siding, OSB, batts and drywall, interior doors are hollow-core and the front door is solid. Brick, porcelain, appliance steel and the car stop or slow rounds by their material. Windows break and stay broken.
