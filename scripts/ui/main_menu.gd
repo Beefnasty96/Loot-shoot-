@@ -1,7 +1,8 @@
 extends Node3D
 ## Main menu: a slowly turning 1911 behind Play / Settings / Quit.
 ## Settings holds the options and the Credits page. Works with the Thor's
-## controls (D-pad + A/B) and the touchscreen.
+## controls, an Xbox pad (D-pad or left stick to move, A to press, B back) and
+## the touchscreen.
 
 const RANGE_SCENE := "res://scenes/shooting_range.tscn"
 const HOUSE_SCENE := "res://scenes/shoot_house.tscn"
@@ -29,12 +30,21 @@ func _ready() -> void:
 	_pages.main = _page_main()
 	_pages.settings = _page_settings()
 	_pages.credits = _page_credits()
+	for k: String in _pages:
+		PadFocus.wrap(PadFocus.focusables(_pages[k]))
 	_show("main")
 
 
 func _process(delta: float) -> void:
 	if _gun:
 		_gun.rotate_y(delta * 0.5)
+
+
+func _input(event: InputEvent) -> void:
+	# Nothing highlighted (e.g. after a tap): the first pad press picks the first button.
+	for k: String in _pages:
+		if _pages[k].visible:
+			PadFocus.recover(event, get_viewport(), _first_focusable(_pages[k]))
 
 
 func _unhandled_input(event: InputEvent) -> void:

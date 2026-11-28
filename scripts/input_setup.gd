@@ -40,6 +40,21 @@ func _enter_tree() -> void:
 	_button("toggle_light", JOY_BUTTON_DPAD_DOWN, [KEY_T])           # weapon light
 	_button("use_meds", JOY_BUTTON_DPAD_UP, [KEY_H])                 # treat yourself with what you carry
 
+	# Menus: Godot's built-in ui_accept / ui_cancel have no gamepad buttons, so
+	# the D-pad could move the highlight but A couldn't press it. A = press, B = back.
+	_ui_pad("ui_accept", JOY_BUTTON_A)
+	_ui_pad("ui_cancel", JOY_BUTTON_B)
+
+
+func _ui_pad(action: String, button: JoyButton) -> void:
+	for e in InputMap.action_get_events(action):
+		if e is InputEventJoypadButton and e.button_index == button:
+			return
+	var ev := InputEventJoypadButton.new()
+	ev.device = -1
+	ev.button_index = button
+	InputMap.action_add_event(action, ev)
+
 
 func _ensure(action: String) -> void:
 	if not InputMap.has_action(action):
