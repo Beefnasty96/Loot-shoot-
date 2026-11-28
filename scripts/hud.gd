@@ -12,6 +12,7 @@ var _mag_check: Label
 var _hits: Label
 var _pause_panel: PanelContainer
 var pause_buttons: Array[Button] = []
+var settings_panel: SettingsPanel
 var _hit_lines: Array[String] = []
 var inventory: InventoryScreen
 var _load: Label
@@ -242,7 +243,7 @@ func _build_pause_panel() -> void:
 		"",
 		"Sights are zeroed at 25 yd (75 ft) for 230gr ball.",
 		"Bullet paths: white = flying, orange = after penetrating, yellow = ricochet.",
-		"D-pad / stick: choose    A: select    START: resume",
+		"D-pad / stick: choose    A: select    B / START: resume",
 	])
 	box.add_child(text)
 	var row := HBoxContainer.new()
@@ -250,6 +251,7 @@ func _build_pause_panel() -> void:
 	box.add_child(row)
 	pause_buttons.clear()
 	for spec in [["Resume", func(): _set_paused(false)],
+			["Settings", func(): _open_settings()],
 			["Restart", func():
 				_set_paused(false)
 				get_tree().reload_current_scene()],
@@ -271,9 +273,27 @@ func _build_pause_panel() -> void:
 	add_child(_pause_panel)
 	_pause_panel.resized.connect(func():
 		_pause_panel.position = (get_viewport().get_visible_rect().size - _pause_panel.size) / 2.0)
+	settings_panel = SettingsPanel.new()
+	settings_panel.visible = false
+	settings_panel.closed.connect(func():
+		settings_panel.visible = false
+		_pause_panel.visible = true
+		pause_buttons[1].grab_focus.call_deferred())
+	add_child(settings_panel)
+	settings_panel.resized.connect(func():
+		settings_panel.position = (get_viewport().get_visible_rect().size - settings_panel.size) / 2.0)
+
+
+func _open_settings() -> void:
+	_pause_panel.visible = false
+	settings_panel.visible = true
+	settings_panel.focus_first()
 
 
 func _set_paused(paused: bool) -> void:
+	if not paused and settings_panel and settings_panel.visible:
+		Settings.save_settings()
+		settings_panel.visible = false
 	get_tree().paused = paused
 	_pause_panel.visible = paused
 	if paused:
@@ -310,6 +330,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		_set_paused(not get_tree().paused)
 		get_viewport().set_input_as_handled()
+	elif get_tree().paused and settings_panel.visible:
+		if PadFocus.recover(event, get_viewport(), settings_panel.first_control()):
+			return
+		if event.is_action_pressed("ui_cancel"):
+			settings_panel.close()
+			get_viewport().set_input_as_handled()
 	elif get_tree().paused and _pause_panel.visible:
 		if PadFocus.recover(event, get_viewport(), pause_buttons[0]):
 			return
@@ -374,7 +400,7 @@ func _process(_delta: float) -> void:
 		return
 	var open := inventory != null and inventory.is_open()
 	for c in get_children():
-		if c != inventory and c != _pause_panel and c is CanvasItem:
+		if c != inventory and c != _pause_panel and c != settings_panel and c is CanvasItem:
 			(c as CanvasItem).visible = not open
 	if _hint and _touch_layout:
 		_hint.visible = false   # the on-screen buttons are labelled
