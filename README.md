@@ -183,6 +183,7 @@ godot --headless --fixed-fps 60 -s tools/tests/rifle_556_test.gd  # M4 + 5.56: b
 godot --headless --fixed-fps 60 -s tools/tests/anatomy_test.gd    # organs/bones: wound paths, heart, brain, femur, spine, lungs, liver, dummies, x-ray
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
 godot --headless --fixed-fps 60 -s tools/tests/texture_pool_test.gd # uploaded textures: folders, size tags, normal maps, per-map pools, used in a house
+godot --headless --fixed-fps 60 -s tools/tests/pad_menu_test.gd  # menus on a gamepad: D-pad/stick move (wrapping), A press, B back, pause menu buttons
 godot --headless --fixed-fps 60 -s tools/tests/glass_test.gd     # panes: 6-12 pieces, 2-4 holes, breaks, pieces fall, some stay, range panel comes back
 godot --headless --fixed-fps 60 -s tools/tests/house_gen_test.gd  # generated houses: 12 seeds walkable from the street, both plans, same seed = same house, climb the stairs
 ```

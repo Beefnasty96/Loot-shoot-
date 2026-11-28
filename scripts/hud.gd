@@ -11,6 +11,7 @@ var _ammo_info: Label
 var _mag_check: Label
 var _hits: Label
 var _pause_panel: PanelContainer
+var pause_buttons: Array[Button] = []
 var _hit_lines: Array[String] = []
 var inventory: InventoryScreen
 var _load: Label
@@ -219,6 +220,9 @@ func _build_pause_panel() -> void:
 	style.bg_color = Color(0, 0, 0, 0.82)
 	style.set_content_margin_all(28)
 	_pause_panel.add_theme_stylebox_override("panel", style)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 16)
+	_pause_panel.add_child(box)
 	var text := Label.new()
 	text.add_theme_font_size_override("font_size", 24)
 	text.text = "\n".join([
@@ -238,12 +242,48 @@ func _build_pause_panel() -> void:
 		"",
 		"Sights are zeroed at 25 yd (75 ft) for 230gr ball.",
 		"Bullet paths: white = flying, orange = after penetrating, yellow = ricochet.",
-		"START to resume      Y: quit to main menu",
+		"D-pad / stick: choose    A: select    START: resume",
 	])
-	_pause_panel.add_child(text)
+	box.add_child(text)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	box.add_child(row)
+	pause_buttons.clear()
+	for spec in [["Resume", func(): _set_paused(false)],
+			["Restart", func():
+				_set_paused(false)
+				get_tree().reload_current_scene()],
+			["Main menu", func():
+				_set_paused(false)
+				get_tree().change_scene_to_file("res://scenes/main_menu.tscn")]]:
+		var b := Button.new()
+		b.text = spec[0]
+		b.custom_minimum_size = Vector2(240, 60)
+		b.add_theme_font_size_override("font_size", 26)
+		b.pressed.connect(spec[1])
+		row.add_child(b)
+		pause_buttons.append(b)
+	# Left/right between the buttons, wrapping.
+	var first: Button = pause_buttons[0]
+	var last: Button = pause_buttons[pause_buttons.size() - 1]
+	last.focus_neighbor_right = last.get_path_to(first)
+	first.focus_neighbor_left = first.get_path_to(last)
 	add_child(_pause_panel)
 	_pause_panel.resized.connect(func():
 		_pause_panel.position = (get_viewport().get_visible_rect().size - _pause_panel.size) / 2.0)
+
+
+func _set_paused(paused: bool) -> void:
+	get_tree().paused = paused
+	_pause_panel.visible = paused
+	if paused:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		pause_buttons[0].grab_focus.call_deferred()
+	else:
+		var f := get_viewport().gui_get_focus_owner()
+		if f:
+			f.release_focus()     # so A in the game doesn't press a hidden button
 
 
 ## Open the inventory with something to search: a LootContainer, a dead Npc, or null for the ground.
@@ -268,15 +308,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("pause"):
-		var paused := not get_tree().paused
-		get_tree().paused = paused
-		_pause_panel.visible = paused
-		if paused and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_set_paused(not get_tree().paused)
 		get_viewport().set_input_as_handled()
-	elif get_tree().paused and event.is_action_pressed("switch_weapon"):
-		get_tree().paused = false
-		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
+	elif get_tree().paused and _pause_panel.visible:
+		if PadFocus.recover(event, get_viewport(), pause_buttons[0]):
+			return
+		if event.is_action_pressed("ui_cancel"):
+			_set_paused(false)
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("toggle_debug"):
 		Ballistics.debug_enabled = not Ballistics.debug_enabled
 
