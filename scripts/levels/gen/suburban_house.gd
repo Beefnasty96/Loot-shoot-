@@ -896,9 +896,9 @@ func _build_stair() -> void:
 	for i in STEPS:
 		var top := (i + 1) * RISE
 		var zf := zb - i * TREAD            # front edge (nosing) of this tread
-		var zback := zt
-		box(Vector3(w, top, zf - zback), Vector3(cx, top / 2.0, (zf + zback) / 2.0), tread, "wood")
-		box(Vector3(w, RISE - 0.02, 0.01), Vector3(cx, top - RISE / 2.0, zf + 0.004), riser, "wood", 0.0, false)
+		# One block per step, side by side (stacked overlapping blocks flickered on the stair's side).
+		box(Vector3(w, top, TREAD), Vector3(cx, top / 2.0, zf - TREAD / 2.0), tread, "wood")
+		box(Vector3(w - 0.004, RISE - 0.02, 0.01), Vector3(cx, top - RISE / 2.0, zf + 0.006), riser, "wood", 0.0, false)
 	# Ramp through the nosings, 1 cm proud.
 	var z_lo := zb + TREAD
 	var z_hi := zt + TREAD
@@ -1583,15 +1583,16 @@ func _lot() -> void:
 	box(Vector3(120, 1, 80), Vector3(0, -0.5, -8), lawn, "concrete")
 	if not garage.is_empty():
 		var gw: float = garage.x1 - garage.x0
-		box(Vector3(gw - 0.3, 0.02, 12.0 - fz1 - 0.75), Vector3((garage.x0 + garage.x1) / 2.0, 0.005, (fz1 + 11.25) / 2.0), concrete, "concrete", 0.0, false)
+		box(Vector3(gw - 0.3, 0.02, 12.0 - fz1 - 0.75), Vector3((garage.x0 + garage.x1) / 2.0, 0.01, (fz1 + 11.25) / 2.0), concrete, "concrete", 0.0, false)
 	var fdx := front_door_pos.x
-	box(Vector3(1.0, 0.02, 12.0 - fz1 - 0.75), Vector3(fdx, 0.006, (fz1 + 11.25) / 2.0), concrete, "concrete", 0.0, false)
-	box(Vector3(1.6, 0.03, 1.4), Vector3(fdx, 0.008, fz1 + 0.7), concrete, "concrete", 0.0, false)
-	box(Vector3(120, 0.02, 1.5), Vector3(0, 0.007, 12.0), concrete, "concrete", 0.0, false)
-	box(Vector3(120, 0.02, 8.0), Vector3(0, 0.004, 17.5), asphalt, "concrete", 0.0, false)
+	box(Vector3(1.0, 0.02, 12.0 - fz1 - 0.75), Vector3(fdx, 0.02, (fz1 + 11.25) / 2.0), concrete, "concrete", 0.0, false)
+	# Ground layers sit 1 cm apart (street, sidewalk/driveway, walk, stoop) so their tops never share a plane.
+	box(Vector3(1.6, 0.03, 1.4), Vector3(fdx, 0.025, fz1 + 0.7), concrete, "concrete", 0.0, false)
+	box(Vector3(120, 0.02, 1.5), Vector3(0, 0.01, 12.0), concrete, "concrete", 0.0, false)
+	box(Vector3(120, 0.02, 8.0), Vector3(0, 0.0, 17.5), asphalt, "concrete", 0.0, false)
 	var yellow := flat("lane", Color(0.85, 0.7, 0.2))
 	for i in 17:
-		box(Vector3(2.0, 0.005, 0.12), Vector3(-56.0 + i * 7.0, 0.016, 17.5), yellow, "concrete", 0.0, false)
+		box(Vector3(2.0, 0.005, 0.12), Vector3(-56.0 + i * 7.0, 0.012, 17.5), yellow, "concrete", 0.0, false)
 	box(Vector3(120, 0.12, 0.2), Vector3(0, 0.06, 13.4), flat("curb", Color(0.6, 0.6, 0.58)), "concrete", 0.0, false)
 	# Back yard: privacy fence, deck off the slider.
 	var lx0 := minf(fx0, garage.get("x0", fx0)) - 2.0
