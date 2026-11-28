@@ -43,6 +43,13 @@ func _ftext() -> String:
 	return c.text if c is BaseButton else ("<none>" if c == null else c.get_class())
 
 
+func _settings_open() -> bool:
+	for n in root.find_children("*", "", true, false):
+		if n.get_script() and n.get_script().resource_path.ends_with("settings_panel.gd") and n.is_visible_in_tree():
+			return true
+	return false
+
+
 func _initialize() -> void:
 	menu = load("res://scenes/main_menu.tscn").instantiate()
 	root.add_child(menu)
@@ -66,7 +73,14 @@ func _initialize() -> void:
 		[func(): _btn(JOY_BUTTON_START), func():
 			check(paused, "START pauses")
 			check(_ftext() == "Resume", "and highlights Resume (%s)" % _ftext())],
-		[func(): _btn(JOY_BUTTON_START, false); _btn(JOY_BUTTON_DPAD_RIGHT), func(): check(_ftext() == "Restart", "D-pad right: Restart (%s)" % _ftext())],
+		[func(): _btn(JOY_BUTTON_START, false); _btn(JOY_BUTTON_DPAD_RIGHT), func(): check(_ftext() == "Settings", "D-pad right: Settings (%s)" % _ftext())],
+		[func(): _btn(JOY_BUTTON_DPAD_RIGHT, false); _btn(JOY_BUTTON_A); _btn(JOY_BUTTON_A, false), func():
+			check(root.get_tree().current_scene.find_children("*", "SettingsPanel", true, false).size() >= 0 and _settings_open(), "A on Settings opens the settings page")
+			check(_focus() != null and _focus().name == "Field of view", "with its first control highlighted (%s)" % (_focus().name if _focus() else "<none>"))],
+		[func(): _btn(JOY_BUTTON_B); _btn(JOY_BUTTON_B, false), func():
+			check(not _settings_open() and paused, "B closes it, still paused")
+			check(_ftext() == "Settings", "back on the Settings button (%s)" % _ftext())],
+		[func(): _btn(JOY_BUTTON_DPAD_RIGHT), func(): check(_ftext() == "Restart", "then Restart (%s)" % _ftext())],
 		[func(): _btn(JOY_BUTTON_DPAD_RIGHT, false); _btn(JOY_BUTTON_DPAD_RIGHT), func(): pass],
 		[func(): _btn(JOY_BUTTON_DPAD_RIGHT, false); _btn(JOY_BUTTON_DPAD_RIGHT), func(): check(_ftext() == "Resume", "wraps round to Resume (%s)" % _ftext())],
 		[func(): _btn(JOY_BUTTON_DPAD_RIGHT, false); _btn(JOY_BUTTON_A); _btn(JOY_BUTTON_A, false), func():

@@ -141,17 +141,11 @@ func _page_main() -> Control:
 
 
 func _page_settings() -> Control:
-	var box := _panel()
-	_title(box, "SETTINGS", 44)
-	_slider(box, "Look sensitivity", 0.3, 2.5, 0.05, Settings.look_sensitivity, func(v): Settings.look_sensitivity = v, "%.2fx")
-	_slider(box, "Field of view", 60.0, 95.0, 1.0, Settings.fov, func(v): Settings.fov = v, "%d deg")
-	_check(box, "Invert look up/down", Settings.invert_look_y, func(on): Settings.invert_look_y = on)
-	_check(box, "Bullet paths on the range", Settings.show_bullet_paths, func(on): Settings.show_bullet_paths = on)
-	_button(box, "Credits", func(): _show("credits"))
-	_button(box, "Back", func():
-		Settings.save_settings()
-		_show("main"))
-	return box.get_parent()
+	var panel := SettingsPanel.new([["Credits", func(): _show("credits")]])
+	panel.position = Vector2(80, 120)
+	panel.closed.connect(func(): _show("main"))
+	_ui.add_child(panel)
+	return panel
 
 
 func _page_credits() -> Control:
@@ -171,40 +165,6 @@ func _page_credits() -> Control:
 		box.add_child(who)
 	_button(box, "Back", func(): _show("settings"))
 	return box.get_parent()
-
-
-func _slider(box: VBoxContainer, label: String, lo: float, hi: float, step: float, value: float, on_change: Callable, fmt: String) -> void:
-	var row := HBoxContainer.new()
-	var l := Label.new()
-	l.text = label
-	l.custom_minimum_size = Vector2(300, 0)
-	l.add_theme_font_size_override("font_size", 24)
-	row.add_child(l)
-	var s := HSlider.new()
-	s.min_value = lo
-	s.max_value = hi
-	s.step = step
-	s.value = value
-	s.custom_minimum_size = Vector2(260, 48)
-	row.add_child(s)
-	var v := Label.new()
-	v.text = fmt % value
-	v.custom_minimum_size = Vector2(110, 0)
-	v.add_theme_font_size_override("font_size", 24)
-	row.add_child(v)
-	s.value_changed.connect(func(x):
-		on_change.call(x)
-		v.text = fmt % x)
-	box.add_child(row)
-
-
-func _check(box: VBoxContainer, label: String, value: bool, on_change: Callable) -> void:
-	var c := CheckButton.new()
-	c.text = label
-	c.button_pressed = value
-	c.add_theme_font_size_override("font_size", 24)
-	c.toggled.connect(on_change)
-	box.add_child(c)
 
 
 func _show(page: String) -> void:

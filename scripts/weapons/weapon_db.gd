@@ -50,7 +50,7 @@ const WEAPONS := {
 		rig = {
 			anim = "rifle", travel = 0.075, cycle = 0.062, reload = 2.3, reload_empty = 2.7, mag_axis = Vector3(0.0, -0.99, -0.12),
 			mag_drop = 0.26, zero_m = 45.72, zero_ammo = "556_1_m193", casing = Vector2(0.0048, 0.045), flash = 0.16,
-			recoil_k = 0.42, view_kick = 0.12, bloom = 0.22, sight_hold = 0.06, hip_spread = 1.2, aim_fov = 55.0, auto_climb = 0.85,
+			recoil_k = 0.42, view_kick = 0.12, bloom = 0.22, sight_hold = 0.06, hip_spread = 1.2, auto_climb = 0.85,
 			view = {
 				hip = Vector3(0.12, -0.145, -0.27), hip_rot = Vector3(1.5, 2.5, -5.0),
 				aim = Vector3(0.0, -0.0649, -0.2128), sprint = Vector3(0.06, -0.16, -0.291), sprint_rot = Vector3(-24.0, 40.0, 14.0),
@@ -130,13 +130,13 @@ const MAG_FAMILIES := {"mag_1911": ".45 ACP", "stanag": "5.56 NATO"}
 ##   zero_m / zero_ammo: where the sights cross the bullet path, for which load
 ##   casing: (radius, length) m; flash: muzzle flash size m
 ##   recoil_k: kick per unit of bullet momentum; view_kick: viewmodel jolt; bloom: spread added per shot
-##   sight_hold: extra spread aimed (degrees); aim_fov: aimed field of view; auto_climb: muzzle climb kept in auto
+##   sight_hold: extra spread aimed (degrees); auto_climb: muzzle climb kept in auto
 ##   view: first-person poses (gun-model origin relative to the camera) and arms model
 ##   tp: third-person hold: model offset from the head, and hand markers (gun space)
 const RIG_DEFAULTS := {
 	anim = "pistol", travel = 0.032, cycle = 0.075, reload = 1.7, reload_empty = 2.2, mag_axis = Vector3(0.0, -0.951, 0.309),
 	mag_drop = 0.14, zero_m = 22.86, zero_ammo = "45_1_fmj230", casing = Vector2(0.006, 0.023), flash = 0.09,
-	recoil_k = 0.72, view_kick = 1.0 / 3.8, bloom = 0.45, sight_hold = 0.12, hip_spread = 1.6, aim_fov = 50.0, auto_climb = 1.0,
+	recoil_k = 0.72, view_kick = 1.0 / 3.8, bloom = 0.45, sight_hold = 0.12, hip_spread = 1.6, auto_climb = 1.0,
 	view = {
 		hip = Vector3(0.072, -0.06, -0.215), hip_rot = Vector3(2.0, 4.0, -3.0), aim = Vector3(0.0, -0.0202, -0.40),
 		sprint = Vector3(0.05, -0.15, -0.21), sprint_rot = Vector3(-38.0, 22.0, 12.0),

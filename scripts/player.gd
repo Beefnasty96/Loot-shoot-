@@ -12,7 +12,7 @@ enum View { FIRST, THIRD }
 @export var crouch_speed := 1.6
 @export var acceleration := 14.0
 @export var look_speed_deg := 170.0   ## Degrees per second at full right-stick deflection.
-@export var aim_look_scale := 0.45    ## Look speed multiplier while aiming.
+const ADS_ZOOM := 1.5                  ## Aiming down sights magnifies the view 1.5x.
 @export var mouse_sensitivity := 0.12 ## Degrees per pixel (PC testing).
 @export var fov_normal := 75.0
 @export var fov_aim := 50.0
@@ -34,6 +34,7 @@ var sprinting := false
 var crouching := false
 var aiming := false
 var lean := 0.0
+var _lean_latch := 0            ## Toggle-lean state: -1 left, 0 upright, 1 right.
 var pitch := 0.0
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -176,7 +177,7 @@ func _build() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		var s := (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
+		var s := look_scale()
 		var inv := -1.0 if Settings.invert_look_y else 1.0
 		_turn(-event.relative.x * mouse_sensitivity * s, -event.relative.y * mouse_sensitivity * s * inv)
 	elif event is InputEventMouseButton and event.pressed and OS.has_feature("pc"):
@@ -197,8 +198,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				_set_crouch(false)
 	elif event.is_action_pressed("swap_shoulder"):
 		shoulder = -shoulder
-	elif event.is_action_pressed("crouch"):
+	elif event.is_action_pressed("crouch") and Settings.toggle_crouch:
 		_set_crouch(not crouching)
+	elif event.is_action_pressed("lean_left") and Settings.toggle_lean:
+		_lean_latch = 0 if _lean_latch == -1 else -1
+	elif event.is_action_pressed("lean_right") and Settings.toggle_lean:
+		_lean_latch = 0 if _lean_latch == 1 else 1
 	elif event.is_action_pressed("use_meds"):
 		_med_note(vitals.use_meds())
 	elif event.is_action_pressed("toggle_light"):
@@ -362,7 +367,7 @@ func _turn(yaw_deg: float, pitch_deg: float) -> void:
 func touch_look(drag_deg: Vector2) -> void:
 	if ui_locked:
 		return
-	var s := (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
+	var s := look_scale()
 	var inv := -1.0 if Settings.invert_look_y else 1.0
 	_turn(-drag_deg.x * s, -drag_deg.y * s * inv)
 
@@ -374,7 +379,7 @@ func _process(delta: float) -> void:
 	var look := Input.get_vector("look_left", "look_right", "look_up", "look_down")
 	if look.length() > 0.0:
 		look = look.normalized() * pow(look.length(), 2.0)
-		var speed := look_speed_deg * (aim_look_scale if aiming else 1.0) * Settings.look_sensitivity
+		var speed := look_speed_deg * look_scale()
 		var inv := -1.0 if Settings.invert_look_y else 1.0
 		_turn(-look.x * speed * delta, -look.y * speed * delta * inv)
 
@@ -425,14 +430,24 @@ func _process(delta: float) -> void:
 			sprinting = false
 		_apply_view()
 
-	# Lean (hold L1 / R1).
+	# Lean: hold L1 / R1, or tap to toggle (Settings.toggle_lean).
 	var lean_target := 0.0
-	if Input.is_action_pressed("lean_left") and not ui_locked:
-		lean_target -= 1.0
-	if Input.is_action_pressed("lean_right") and not ui_locked:
-		lean_target += 1.0
+	if Settings.toggle_lean:
+		lean_target = float(_lean_latch)
+	else:
+		_lean_latch = 0
+		if Input.is_action_pressed("lean_left") and not ui_locked:
+			lean_target -= 1.0
+		if Input.is_action_pressed("lean_right") and not ui_locked:
+			lean_target += 1.0
 	if sprinting:
 		lean_target = 0.0
+		_lean_latch = 0
+	# Crouch: tap B to toggle, or hold it (Settings.toggle_crouch).
+	if not Settings.toggle_crouch:
+		var want := Input.is_action_pressed("crouch") and not ui_locked and not sprinting
+		if want != crouching:
+			_set_crouch(want)
 	lean = move_toward(lean, lean_target, delta * 5.0)
 
 	# Smooth crouch height and eye height.
@@ -465,7 +480,7 @@ func _process(delta: float) -> void:
 	character.crouch = move_toward(character.crouch, 1.0 if crouching else 0.0, delta * 5.0)
 
 	var gun_drawn := active_weapon == "pistol" or active_weapon == "rifle"
-	var target_fov := float(firearm.rig.aim_fov) * Settings.fov / 75.0 if aiming and gun_drawn and firearm else Settings.fov
+	var target_fov := ads_fov() if aiming and gun_drawn and firearm else Settings.fov
 	fp_camera.fov = lerpf(fp_camera.fov, target_fov, minf(1.0, delta * 12.0))
 	tp_camera.fov = Settings.fov
 
@@ -501,6 +516,17 @@ func _physics_process(delta: float) -> void:
 
 
 # ---------------------------------------------------------------- state
+
+## Look speed multiplier: the look sensitivity, times the aim sensitivity while aiming down sights.
+func look_scale() -> float:
+	return Settings.look_sensitivity * (Settings.aim_sensitivity if aiming else 1.0)
+
+
+## Field of view aimed down sights: the normal view magnified ADS_ZOOM times
+## (tan of the half-angle divided by 1.5, so things look 1.5x bigger).
+func ads_fov() -> float:
+	return rad_to_deg(2.0 * atan(tan(deg_to_rad(Settings.fov) / 2.0) / ADS_ZOOM))
+
 
 func _set_crouch(on: bool) -> void:
 	if not on and _blocked_above():

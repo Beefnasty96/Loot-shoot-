@@ -14,7 +14,7 @@ Every push to `main` builds an APK automatically (GitHub Actions, about 5 minute
 
 ## Current step: shooting range (v0.4)
 
-The game opens on a main menu (Play / Settings / Quit; Settings has look sensitivity, field of view, invert look, bullet paths and **Credits**). The shooting range is a grey-box yard with cover, a 100 yd range with five lanes (targets at 25 ft and 25 / 50 / 75 / 100 yd) running out of the yard, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
+The game opens on a main menu (Play / Settings / Quit; Settings has field of view, look sensitivity, aim sensitivity (while aiming down sights), invert look, crouch toggle/hold, lean hold/toggle, bullet paths and **Credits**; the same Settings page is in the pause menu). Aiming down sights magnifies the view 1.5x at any field of view. The shooting range is a grey-box yard with cover, a 100 yd range with five lanes (targets at 25 ft and 25 / 50 / 75 / 100 yd) running out of the yard, a **barrier test row** (1/2 in drywall stud wall, 3/4 in plywood, 1/4 in glass, car door, 1/8 in and 1/4 in steel, 4 in brick, 6 in concrete) with a dummy behind each, a brick house with a drywall partition (dummy hiding behind it), and stairs to a platform.
 
 | Thor control | Action |
 | --- | --- |
@@ -184,6 +184,7 @@ godot --headless --fixed-fps 60 -s tools/tests/anatomy_test.gd    # organs/bones
 godot --headless --fixed-fps 60 -s tools/tests/touch_test.gd      # on-screen controller: stick, look, fire, aim toggle, buttons, hides for a gamepad
 godot --headless --fixed-fps 60 -s tools/tests/texture_pool_test.gd # uploaded textures: folders, size tags, normal maps, per-map pools, used in a house
 godot --headless --fixed-fps 60 -s tools/tests/pad_menu_test.gd  # menus on a gamepad: D-pad/stick move (wrapping), A press, B back, pause menu buttons
+godot --headless --fixed-fps 60 -s tools/tests/settings_test.gd   # 1.5x ADS zoom, aim sensitivity, crouch toggle/hold, lean hold/toggle, saved settings
 godot --headless --fixed-fps 60 -s tools/tests/glass_test.gd     # panes: 6-12 pieces, 2-4 holes, breaks, pieces fall, some stay, range panel comes back
 godot --headless --fixed-fps 60 -s tools/tests/house_gen_test.gd  # generated houses: 12 seeds walkable from the street, both plans, same seed = same house, climb the stairs
 ```
