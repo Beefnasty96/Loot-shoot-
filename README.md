@@ -269,6 +269,7 @@ Main menu > "Play (random mission)" picks a map type for the level; "Play (subur
   - Furniture stands against walls or in the middle of a room. It stays clear of door swings and windows (tall pieces don't block windows), and a piece is left out if it would cut a room off from one of its doors. This is checked on a 6 in walkability grid.
   - The stairs are solid treads with an invisible ramp along the nosings, so you and the AI's navmesh both treat them as a slope.
 - **Your own textures:** image files dropped into `assets/textures/` join the pools the generator picks walls, floors, ceilings, siding, roofs, ground, fences, furniture wood/fabric and countertops from. `common/` is used by every map type and `<map type>/` by just that one. The folder list and naming rules (`@4ft` size tags, `_normal` maps) are in `assets/textures/README.md`; the code is `scripts/levels/texture_pool.gd`.
+- **Start:** you start outside where none of the occupants can see you: the spot along the street (either side) or in a side yard nearest the front walk with no line of sight from any of them (through glass counts; walls and closed doors block). The 1995 shoot house does the same.
 - **Seeds:** the layout seed is shown on the sign by the sidewalk. Setting `layout_seed` before the level loads rebuilds that exact house (`0` means a new one).
 
 ## Glass

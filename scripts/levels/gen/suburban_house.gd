@@ -84,6 +84,7 @@ func build() -> void:
 	nav_aabb = AABB(Vector3(minf(fx0, gx0) - 4.0, -1.0, fz0 - 4.0), Vector3(maxf(fx1, gx1) - minf(fx0, gx0) + 8.0, stories * FH + 2.0, 15.0 - fz0 + 4.0))
 	player_start = Vector3(front_door_pos.x, 0.05, 15.0)
 	player_yaw = 0.0
+	look_target = Vector3((fx0 + fx1) / 2.0, 1.2, (fz0 + fz1) / 2.0)
 	var beds := 0
 	for r: Dictionary in plan:
 		if r.kind in ["bedroom", "master"] and r.group != "master_b":
@@ -1653,6 +1654,23 @@ func _neighbours() -> void:
 
 
 # ================================================================== occupants
+
+## Where you might start: along the sidewalk and the far side of the street,
+## and in the side yards between this house and the neighbours. MissionLevel
+## picks the one no occupant can see that's nearest the front walk.
+func spawn_candidates() -> Array[Vector3]:
+	var lx0 := minf(fx0, garage.get("x0", fx0)) - 2.0
+	var lx1 := maxf(fx1, garage.get("x1", fx1)) + 2.0
+	var out: Array[Vector3] = []
+	var x := lx0 - 8.0
+	while x <= lx1 + 8.0:
+		for z in [12.6, 15.0, 20.6]:
+			out.append(Vector3(x, 0.0, z))
+		x += 1.5
+	for sx in [lx0 - 3.5, lx1 + 3.5]:
+		for z in [fz1 + 2.0, (fz0 + fz1) / 2.0, fz0 + 1.5]:
+			out.append(Vector3(sx, 0.0, z))
+	return out
 
 func _spawn_enemies() -> void:
 	var rng := RandomNumberGenerator.new()
