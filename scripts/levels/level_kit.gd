@@ -283,7 +283,7 @@ func _window(centre: Vector3, w: float, sill: float, head: float, along_x: bool,
 	var trim := flat("trim", Color(0.95, 0.94, 0.9), 0.5)
 	# Muntin cross (a 1995 builder-grade colonial grid).
 	box(Vector3(w, 0.025, 0.02) if along_x else Vector3(0.02, 0.025, w), centre + Vector3(0, sill + h / 2.0, 0), trim, "wood", 0.0, false)
-	box(Vector3(0.025, h, 0.02) if along_x else Vector3(0.02, h, 0.025), centre + Vector3(0, sill + h / 2.0, 0), trim, "wood", 0.0, false)
+	box(Vector3(0.025, h, 0.024) if along_x else Vector3(0.024, h, 0.025), centre + Vector3(0, sill + h / 2.0, 0), trim, "wood", 0.0, false)   # a bit deeper than the bar across, so their faces don't share a plane
 	_trim_frame(centre, w, head, along_x, wall_t, sill)
 	box(Vector3(w + 0.1, 0.03, wall_t + 0.06) if along_x else Vector3(wall_t + 0.06, 0.03, w + 0.1), centre + Vector3(0, sill, 0), trim, "wood", 0.0, false)
 
@@ -293,10 +293,14 @@ func _trim_frame(centre: Vector3, w: float, head: float, along_x: bool, wall_t: 
 	var trim := flat("trim", Color(0.95, 0.94, 0.9), 0.5)
 	var depth := wall_t + 0.02
 	var h := head - sill
+	# The casing laps 6 mm into the opening, so the cut ends of the wall sit inside it
+	# (face to face with the wall's end they flickered).
+	var lap := 0.006
 	for side in [-1.0, 1.0]:
-		var off := Vector3(side * (w / 2.0 + 0.03), sill + h / 2.0, 0.0) if along_x else Vector3(0.0, sill + h / 2.0, side * (w / 2.0 + 0.03))
-		box(Vector3(0.06, h, depth) if along_x else Vector3(depth, h, 0.06), centre + off, trim, "wood", 0.0, false)
-	box(Vector3(w + 0.12, 0.07, depth) if along_x else Vector3(depth, 0.07, w + 0.12), centre + Vector3(0, head + 0.035, 0), trim, "wood", 0.0, false)
+		var cx: float = side * (w / 2.0 + 0.03 - lap / 2.0)
+		var off := Vector3(cx, sill + h / 2.0, 0.0) if along_x else Vector3(0.0, sill + h / 2.0, cx)
+		box(Vector3(0.06 + lap, h, depth) if along_x else Vector3(depth, h, 0.06 + lap), centre + off, trim, "wood", 0.0, false)
+	box(Vector3(w + 0.12, 0.07 + lap, depth) if along_x else Vector3(depth, 0.07 + lap, w + 0.12), centre + Vector3(0, head + 0.035 - lap / 2.0, 0), trim, "wood", 0.0, false)
 
 
 ## Floor finish (no collision; the slab underneath has it) and ceiling for a rectangular room.
@@ -305,7 +309,9 @@ func room(x0: float, z0: float, x1: float, z1: float, floor_m: Material, ceiling
 		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, 0.01, (z0 + z1) / 2.0), floor_m, "concrete", 0.0, false)
 	if ceiling:
 		var popcorn: Material = ceiling_material if ceiling_material else textured("popcorn", img_noise(Color(0.9, 0.89, 0.86), 0.05, 32, 4), 0.5, 1.0)
-		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, CEILING + 0.01, (z0 + z1) / 2.0), popcorn, "drywall", 0.0, false)
+		# Its underside sits 16 mm below the ceiling line: anything else up there (the floor
+		# above, a ceiling slab) has its own face at CEILING, and two faces in one plane flicker.
+		box(Vector3(x1 - x0, 0.02, z1 - z0), Vector3((x0 + x1) / 2.0, CEILING - 0.006, (z0 + z1) / 2.0), popcorn, "drywall", 0.0, false)
 	if light > 0.0:
 		var l := OmniLight3D.new()
 		l.position = Vector3((x0 + x1) / 2.0, floor_y + CEILING - 0.25, (z0 + z1) / 2.0)

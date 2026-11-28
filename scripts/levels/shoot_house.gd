@@ -117,11 +117,11 @@ func _lot() -> void:
 	box(Vector3(90, 1, 70), Vector3(0, -0.5, -5), lawn, "concrete")
 	# House and garage slab (the floor finishes sit on top).
 	box(Vector3(X1 - GX0, 0.02, Z1 - Z0), Vector3((X1 + GX0) / 2.0, 0.0, (Z0 + Z1) / 2.0), concrete, "concrete", 0.0, false)
-	box(Vector3(6.7, 0.02, 7.0), Vector3((GX0 + X0) / 2.0, 0.005, Z1 + 3.5), concrete, "concrete", 0.0, false)   # driveway
-	box(Vector3(1.0, 0.02, 4.2), Vector3(-2.55, 0.006, Z1 + 2.1), concrete, "concrete", 0.0, false)               # front walk
-	box(Vector3(1.6, 0.03, 1.4), Vector3(-2.55, 0.008, Z1 + 0.7), concrete, "concrete", 0.0, false)               # stoop
-	box(Vector3(90, 0.02, 1.5), Vector3(0, 0.007, 12.0), concrete, "concrete", 0.0, false)                       # sidewalk
-	box(Vector3(90, 0.02, 8.0), Vector3(0, 0.004, 17.5), asphalt, "concrete", 0.0, false)                        # street
+	box(Vector3(6.7, 0.02, 7.0), Vector3((GX0 + X0) / 2.0, 0.01, Z1 + 3.5), concrete, "concrete", 0.0, false)   # driveway
+	box(Vector3(1.0, 0.02, 4.2), Vector3(-2.55, 0.02, Z1 + 2.1), concrete, "concrete", 0.0, false)               # front walk
+	box(Vector3(1.6, 0.03, 1.4), Vector3(-2.55, 0.025, Z1 + 0.7), concrete, "concrete", 0.0, false)               # stoop
+	box(Vector3(90, 0.02, 1.5), Vector3(0, 0.01, 12.0), concrete, "concrete", 0.0, false)                       # sidewalk
+	box(Vector3(90, 0.02, 8.0), Vector3(0, 0.0, 17.5), asphalt, "concrete", 0.0, false)                        # street
 	var yellow := flat("lane", Color(0.85, 0.7, 0.2))
 	for i in 12:
 		box(Vector3(2.0, 0.005, 0.12), Vector3(-40.0 + i * 7.0, 0.016, 17.5), yellow, "concrete", 0.0, false)
