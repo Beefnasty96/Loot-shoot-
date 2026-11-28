@@ -14,6 +14,11 @@ var layout_seed := 0
 var rooms := {}
 var player_start := Vector3.ZERO
 var player_yaw := 0.0            ## Degrees; 0 faces -Z.
+## After the occupants are placed you're moved to the spawn_candidates() spot
+## none of them can see (nearest player_start), facing this point.
+var look_target := Vector3.INF
+## How many occupants could see where you ended up (0 unless every spot was in view).
+var start_seen_by := 0
 var clear_text := "CLEAR"
 ## What the navmesh is baked from (static colliders on layer 1 in here).
 var nav_aabb := AABB(Vector3(-22, -1, -16), Vector3(42, 5, 32))
@@ -47,6 +52,71 @@ func _ready() -> void:
 	_hud = hud
 	if spawn_enemies:
 		_spawn_enemies()
+		_safe_start()
+
+
+## Places you could start (on the ground, outside). Empty = always player_start.
+func spawn_candidates() -> Array[Vector3]:
+	return []
+
+
+## Can this occupant see someone standing at `pos` (head, chest or hips; any
+## direction, since they turn round; through glass but not walls or closed doors)?
+func seen_by(e: Node, pos: Vector3) -> bool:
+	if not is_instance_valid(e) or e.dead:
+		return false
+	var eye: Vector3 = e._eye_pos()
+	for h in [1.55, 1.15, 0.6]:
+		var pt: Vector3 = pos + Vector3(0, h, 0)
+		if eye.distance_to(pt) < e.VIEW_RANGE and e._clear(eye, pt):
+			return true
+	return false
+
+
+## Move you to a start nobody can see. Waits two physics frames so the level's
+## colliders are in the physics space before it casts rays.
+func _safe_start() -> void:
+	var cands := spawn_candidates()
+	if cands.is_empty() or enemies.is_empty():
+		return
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	if not is_instance_valid(player):
+		return
+	var space := get_world_3d().direct_space_state
+	var body := CapsuleShape3D.new()
+	body.radius = 0.4
+	body.height = 1.8
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = body
+	q.collision_mask = 1
+	var best := player_start
+	var best_score := INF
+	var best_seen := 0
+	for c in cands:
+		q.transform = Transform3D(Basis(), c + Vector3(0, 1.0, 0))
+		if not space.intersect_shape(q, 1).is_empty():
+			continue      # a tree, a fence, a mailbox
+		var seen := 0
+		for e in enemies:
+			if seen_by(e, c):
+				seen += 1
+		var score := seen * 1000.0 + c.distance_to(player_start)
+		if score < best_score:
+			best_score = score
+			best = c
+			best_seen = seen
+	start_seen_by = best_seen
+	player.global_position = best + Vector3(0, 0.05, 0)
+	player.velocity = Vector3.ZERO
+	if look_target != Vector3.INF:
+		var d := look_target - best
+		player.rotation.y = atan2(-d.x, -d.z)
+	# Anything they glimpsed in those two frames is forgotten.
+	for e in enemies:
+		if is_instance_valid(e):
+			e.awareness = 0.0
+			e.can_see_target = false
 
 
 ## Build the level geometry and fill rooms / player_start / nav_aabb.

@@ -59,6 +59,14 @@ func _process(_d: float) -> bool:
 			if c.has_method("breaks_after") and c.global_position.distance_to(Vector3(1.3, 1.3, 4.75)) < 1.0:
 				set_meta("pane", c)
 		_fire(Vector3(1.3, 1.3, 9.0), Vector3(1.3, 1.3, 2.0))
+	if f == 8:
+		var p = rs.player
+		var seers := 0
+		for e in rs.enemies:
+			if rs.seen_by(e, p.global_position - Vector3(0, 0.05, 0)):
+				seers += 1
+		var pp: Vector3 = p.global_position
+		check((pp.z > 6.0 or pp.x < -15.0 or pp.x > 12.0) and seers == 0, "you start outside where nobody inside can see you (%.1f, %.1f)" % [pp.x, pp.z])
 	if f in [12, 21, 30] and has_meta("pane") and not get_meta("pane").shattered:
 		var dx: float = [0.0, 0.3, -0.25, 0.2][[3, 12, 21, 30].find(f)]
 		_fire(Vector3(1.3 + dx, 1.1 + dx, 9.0), Vector3(1.3 + dx, 1.1 + dx, 2.0))
@@ -85,7 +93,7 @@ func _process(_d: float) -> bool:
 		check(pane != null and pane.shattered, "and stays broken")
 		check(not front.is_open and absf(front._hinge.rotation.y) < 0.01, "the door closes again")
 		var p = rs.player
-		check(p.global_position.distance_to(Vector3(-2.55, 0.05, 15.0)) < 1.0, "you start on the sidewalk out front")
+
 		print("%d failure(s)" % fails)
 		quit(1 if fails else 0)
 	return false

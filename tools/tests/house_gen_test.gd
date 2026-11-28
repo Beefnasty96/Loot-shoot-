@@ -15,6 +15,7 @@ var stair_seed := 0
 var phase := "seeds"
 var wait := 0
 var first_plan := ""
+var spots_in_view := 0
 
 
 func check(cond: bool, what: String) -> void:
@@ -60,7 +61,19 @@ func _check_layout() -> void:
 	var doors := get_nodes_in_group("door")
 	var fronts := doors.filter(func(d): return d.label == "front door")
 	check(fronts.size() == 1 and not fronts[0].is_open, "%s: one front door, shut (%d doors)" % [tag, doors.size()])
-	check(rs.player.global_position.z > 14.0, "%s: you start on the sidewalk" % tag)
+	var pp: Vector3 = rs.player.global_position
+	var outside: bool = pp.x < rs.fx0 - 0.5 or pp.x > rs.fx1 + 0.5 or pp.z < rs.fz0 - 0.5 or pp.z > rs.fz1 + 0.5
+	var seers := 0
+	for e in rs.enemies:
+		if rs.seen_by(e, pp - Vector3(0, 0.05, 0)):
+			seers += 1
+	check(outside and seers == 0, "%s: you start outside where nobody can see you (%.1f, %.1f; seen by %d)" % [tag, pp.x, pp.z, seers])
+	# (and the check has teeth: some of the other spots are in view)
+	for c in rs.spawn_candidates():
+		for e in rs.enemies:
+			if rs.seen_by(e, c):
+				spots_in_view += 1
+				break
 	var map: RID = rs.get_world_3d().navigation_map
 	var street := Vector3(rs.front_door_pos.x, 0, 13.0)
 	var bad: Array = []
@@ -100,6 +113,7 @@ func _process(_d: float) -> bool:
 				_next_seed()
 				if idx >= SEEDS.size():
 					check(styles.has("ranch") and styles.has("colonial"), "both plans come up (%s)" % str(styles.keys()))
+					check(spots_in_view > 10, "%d possible start spots were in an occupant's view (so they weren't used)" % spots_in_view)
 					phase = "same"
 					_load(SEEDS[0], false)
 		"same":

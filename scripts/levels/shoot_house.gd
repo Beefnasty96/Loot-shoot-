@@ -38,6 +38,7 @@ func build() -> void:
 	_rng.seed = 1995
 	clear_text = "HOUSE CLEAR"
 	player_start = Vector3(-2.55, 0.05, 15.0)    # on the sidewalk, facing the front door
+	look_target = Vector3(-2.55, 1.2, 0.0)
 	_materials()
 	_environment()
 	_lot()
@@ -51,6 +52,21 @@ func build() -> void:
 
 
 # ------------------------------------------------------------------ AI
+
+## Start spots along the street and in the side yards; the one nobody can see,
+## nearest the front walk, is used (MissionLevel._safe_start).
+func spawn_candidates() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var x := GX0 - 6.0
+	while x <= X1 + 8.0:
+		for z in [12.6, 15.0, 20.6]:
+			out.append(Vector3(x, 0.0, z))
+		x += 1.5
+	for sx in [GX0 - 5.0, X1 + 5.0]:
+		for z in [Z1 + 2.0, 0.0, Z0 + 1.5]:
+			out.append(Vector3(sx, 0.0, z))
+	return out
+
 
 ## Five occupants: [room, weapon, role, facing toward, patrol rooms].
 func _spawn_enemies() -> void:
